@@ -71,25 +71,40 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
             return 
         }
         
+        // 1. Session Category
         do {
             let session = AVAudioSession.sharedInstance()
             LogManager.shared.log("AudioManager: Activating session...")
             
-            // Apply Audio Output Setting
-            let preferSpeaker = UserDefaults.standard.bool(forKey: "preferInternalSpeaker")
+            // Simplify category setting to fix Error -50 (Invalid Param)
+            // Just use .playback which is the critical part for background audio
+            try session.setCategory(.playback, mode: .default)
+            LogManager.shared.log("AudioManager: Category set to .playback (Default options)")
             
-            if preferSpeaker {
-                try session.setCategory(.playback, mode: .default, options: [.defaultToSpeaker, .duckOthers])
-                LogManager.shared.log("AudioManager: Category set to Playback (Speaker)")
-            } else {
-                // Allows Bluetooth/AirPlay to take lead if connected
-                try session.setCategory(.playback, mode: .default, options: [.allowBluetoothA2DP, .allowAirPlay, .duckOthers])
-                LogManager.shared.log("AudioManager: Category set to Playback (Bluetooth Allowed)")
-            }
+            // Note: .duckOthers and .defaultToSpeaker might be causing conflicts on some devices
+            // if the session is already active or if the validation checks fail.
+            // We start simple to ensure background audio works.
             
-            try session.setActive(true)
-            LogManager.shared.log("AudioManager: Session active.")
+        } catch {
+            let msg = "AudioManager: Session Category Failed: \(error.localizedDescription) (\(error))"
+            print(msg)
+            LogManager.shared.log(msg)
+            // If this fails, background audio WILL fail.
+        }
+
+        // 2. Session Active
+        do {
+             try AVAudioSession.sharedInstance().setActive(true)
+             LogManager.shared.log("AudioManager: Session active.")
+        } catch {
+             let msg = "AudioManager: Session Active Failed: \(error.localizedDescription) (\(error))"
+             print(msg)
+             LogManager.shared.log(msg)
+        }
             
+        // 3. Player Init
+        do {
+            LogManager.shared.log("AudioManager: Initializing player with URL: \(url)")
             player = try AVAudioPlayer(contentsOf: url)
             player?.delegate = self
             
@@ -104,7 +119,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                  LogManager.shared.log(msg)
             }
         } catch {
-            let msg = "AudioManager: Playback failed: \(error.localizedDescription)"
+            let msg = "AudioManager: Player Init Failed: \(error.localizedDescription) (\(error))"
             print(msg)
             LogManager.shared.log(msg)
         }

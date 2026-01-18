@@ -180,6 +180,16 @@ struct SettingsView: View {
             }
             
             Section(header: Text("Testing")) {
+                Button("Play Adhan Now (Foreground)") {
+                    AudioManager.shared.playAdhan(fileName: "adhan_regular")
+                }
+                .foregroundColor(.blue)
+                
+                Button("Stop Audio") {
+                    AudioManager.shared.stop()
+                }
+                .foregroundColor(.orange)
+                
                 Button("Test Background Adhan (2 min)") {
                     // Schedule a fake adhan 2 minutes from now using TimeInterval trigger
                     NotificationManager.shared.scheduleTestNotification(seconds: 120)
