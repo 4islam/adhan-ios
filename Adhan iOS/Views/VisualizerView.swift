@@ -1,4 +1,6 @@
 import SwiftUI
+import CoreLocation
+import Combine
 
 struct VisualizerView: View {
     @EnvironmentObject var locationManager: LocationManager

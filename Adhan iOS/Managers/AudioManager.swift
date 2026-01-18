@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Combine
 
 class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = AudioManager()
@@ -59,7 +60,9 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
         
         guard let url = fileURL else { 
-            print("Failed to find audio file: \(chosenFile)")
+            let msg = "AudioManager: Failed to find audio file: \(chosenFile)"
+            print(msg)
+            LogManager.shared.log(msg)
             return 
         }
         
@@ -83,8 +86,11 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
             player?.play()
             isPlaying = true
             updateCurrentRoute()
+            LogManager.shared.log("AudioManager: Playing \(chosenFile)")
         } catch {
-            print("Audio playback failed: \(error)")
+            let msg = "AudioManager: Playback failed: \(error.localizedDescription)"
+            print(msg)
+            LogManager.shared.log(msg)
         }
     }
     
@@ -98,7 +104,9 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
-            print("Failed to deactivate audio session: \(error)")
+            let msg = "AudioManager: Failed to deactivate session: \(error.localizedDescription)"
+            print(msg)
+            LogManager.shared.log(msg)
         }
     }
     

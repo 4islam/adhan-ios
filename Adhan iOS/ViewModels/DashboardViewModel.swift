@@ -263,13 +263,13 @@ class DashboardViewModel: ObservableObject {
         
         // 4. Tahajjud (minutes before Fajr)
         // We'll calculate this after applying offsets to ensure consistency
-        let tahajjudFloatRaw = (validFloatTimes[0] - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+        _ = (validFloatTimes[0] - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
         
         // 5. Combining Logic
         // validFloatTimes: [Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib, Isha]
         var fajrFloat = validFloatTimes[0]
-        var dhuhrFloat = validFloatTimes[2]
-        var asrFloat = validFloatTimes[3]
+        let dhuhrFloat = validFloatTimes[2]
+        let asrFloat = validFloatTimes[3]
         var maghribFloat = validFloatTimes[5]
         var ishaFloat = validFloatTimes[6]
         
@@ -489,7 +489,7 @@ class DashboardViewModel: ObservableObject {
                 // Clear all
                 let title = newItems[i].title
                 // Handle combined names e.g. "Dhuhr & Asr"
-                let isMatch = title.contains(focusName) // Simple contains might be risky if names overlap, but specific names should be fine.
+                _ = title.contains(focusName) // Simple contains might be risky if names overlap, but specific names should be fine.
                              || (focusName == "Jummah (or Dhuhr)" && title.contains("Dhuhr"))
                 
                 // Precise matching

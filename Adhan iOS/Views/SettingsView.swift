@@ -29,6 +29,7 @@ struct SettingsView: View {
     let adhanOptions = ["adhan_regular", "adhan_fajr"] // Dynamically could be improved but sufficient for now
     
     @State private var showingDocumentPicker = false
+    @State private var showingTestAlert = false
     @State private var selectingForPrayer = ""
     @EnvironmentObject var viewModel: DashboardViewModel // Ensure access to import logic if needed
     
@@ -177,12 +178,71 @@ struct SettingsView: View {
                 Stepper("Maghrib: \(Int(maghribOffset))", value: $maghribOffset, in: -60...60)
                 Stepper("Isha: \(Int(ishaOffset))", value: $ishaOffset, in: -60...60)
             }
+            
+            Section(header: Text("Testing")) {
+                Button("Test Background Adhan (1 min)") {
+                    // Schedule for 1 minute from now
+                    let testDate = Date().addingTimeInterval(60)
+                    NotificationManager.shared.schedulePrayerNotification(
+                        id: "TEST_ADHAN",
+                        title: "Test Adhan",
+                        body: "This is a test of the background playback.",
+                        date: testDate,
+                        soundName: adhanDhuhr // Use default or selected Dhuhr sound
+                    )
+                    showingTestAlert = true
+                }
+                .foregroundColor(.red)
+                
+                NavigationLink(destination: LogsView()) {
+                    Text("View Error Logs")
+                }
+            }
         }
+        .alert("Adhan Scheduled", isPresented: $showingTestAlert) {
+            Button("OK", role:.cancel) { }
+        } message: {
+            Text("A test Adhan has been scheduled for 1 minute from now.\n\nPlease LOCK your screen immediately to test background playback.")
+        }
+
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker(isPresented: $showingDocumentPicker) { url in
                 viewModel.importCustomAdhan(url: url, for: selectingForPrayer)
             }
         }
         .navigationTitle("Settings")
+    }
+}
+
+struct LogsView: View {
+    @ObservedObject var logManager = LogManager.shared
+    
+    var body: some View {
+        List {
+            if logManager.logs.isEmpty {
+                Text("No logs recorded.")
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(logManager.logs) { log in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(log.message)
+                            .font(.body)
+                            .foregroundColor(.primary)
+                        Text(log.timestamp, style: .date) + Text(" at ") + Text(log.timestamp, style: .time)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .navigationTitle("Error Logs")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Clear") {
+                    logManager.clearLogs()
+                }
+            }
+        }
     }
 }

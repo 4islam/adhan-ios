@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import Combine
 
 class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
@@ -17,6 +18,10 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
                 self.isAuthorized = granted
                 if granted {
                     self.setupNotificationCategories()
+                    LogManager.shared.log("Notifications: Authorization granted")
+                } else {
+                    let msg = "Notifications: Authorization denied. Error: \(String(describing: error))"
+                    LogManager.shared.log(msg)
                 }
             }
         }
@@ -65,6 +70,7 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         if response.actionIdentifier == "PLAY_ADHAN" {
             let adhanFile = response.notification.request.content.userInfo["ADHAN_FILE"] as? String
+            LogManager.shared.log("Notifications: Received PLAY_ADHAN action. File: \(adhanFile ?? "nil")")
             // Tell AudioManager to play the specific audio selected
             AudioManager.shared.playAdhan(fileName: adhanFile)
         }
