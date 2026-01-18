@@ -48,6 +48,7 @@ struct Adhan_iOSApp: App {
                         LogManager.shared.log("Adhan_iOSApp: App entered background")
                     case .active:
                         LogManager.shared.log("Adhan_iOSApp: App became active")
+                        notificationManager.checkAuthorizationStatus()
                     case .inactive:
                         LogManager.shared.log("Adhan_iOSApp: App became inactive")
                     @unknown default:

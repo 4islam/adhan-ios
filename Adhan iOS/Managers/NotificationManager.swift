@@ -40,6 +40,52 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
     
+    func checkAuthorizationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                var msg = "Notifications: Authorization Status: \(settings.authorizationStatus.rawValue)"
+                msg += " | Sound: \(settings.soundSetting.rawValue)"
+                msg += " | Alert: \(settings.alertSetting.rawValue)"
+                msg += " | Badge: \(settings.badgeSetting.rawValue)"
+                LogManager.shared.log(msg)
+                
+                if settings.authorizationStatus != .authorized {
+                    LogManager.shared.log("WARNING: Notifications not fully authorized!")
+                }
+            }
+        }
+    }
+
+    func scheduleTestNotification(seconds: TimeInterval) {
+        let content = UNMutableNotificationContent()
+        content.title = "Test Adhan"
+        content.body = "Testing background playback"
+        
+        if Bundle.main.url(forResource: "adhan_short", withExtension: "caf") != nil {
+            content.sound = UNNotificationSound(named: UNNotificationSoundName("adhan_short.caf"))
+        } else {
+             content.sound = .default
+        }
+        
+        content.categoryIdentifier = "PRAYER_ALERT"
+        content.userInfo = [
+            "PRAYER_TITLE": "Test Adhan",
+            "ADHAN_FILE": "adhan_regular"
+        ]
+        
+        // Use TimeInterval trigger for explicit countdown test
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
+        
+        let request = UNNotificationRequest(identifier: "test_adhan", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                LogManager.shared.log("Notifications: Failed to schedule Test Adhan: \(error.localizedDescription)")
+            } else {
+                LogManager.shared.log("Notifications: Scheduled Test Adhan in \(seconds) seconds")
+            }
+        }
+    }
+
     func schedulePrayerNotification(id: String, title: String, body: String, date: Date, soundName: String? = nil) {
         let content = UNMutableNotificationContent()
         content.title = title

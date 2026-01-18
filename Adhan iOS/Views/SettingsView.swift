@@ -181,15 +181,8 @@ struct SettingsView: View {
             
             Section(header: Text("Testing")) {
                 Button("Test Background Adhan (2 min)") {
-                    // Schedule a fake adhan 2 minutes from now
-                    let testDate = Date().addingTimeInterval(120)
-                    NotificationManager.shared.schedulePrayerNotification(
-                        id: "test_adhan",
-                        title: "Test Adhan",
-                        body: "Testing background playback",
-                        date: testDate,
-                        soundName: "adhan_regular"
-                    )
+                    // Schedule a fake adhan 2 minutes from now using TimeInterval trigger
+                    NotificationManager.shared.scheduleTestNotification(seconds: 120)
                     showingTestAlert = true
                 }
                 .foregroundColor(.red)
