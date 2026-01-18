@@ -168,6 +168,8 @@ class DashboardViewModel: ObservableObject {
             print("Performing throttled 1-hour full calculation...")
             // We need to use the LocationManager directly as the method expects it
             calculatePrayerTimes(location: LocationManager.shared)
+            // Ensure we schedule notifications after a full recalculation
+            scheduleNotifications()
         }
     }
     

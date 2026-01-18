@@ -28,6 +28,8 @@ struct Adhan_iOSApp: App {
         }
     }
     
+    @Environment(\.scenePhase) var scenePhase
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -35,9 +37,22 @@ struct Adhan_iOSApp: App {
                 .environmentObject(notificationManager)
                 .environmentObject(audioManager)
                 .onAppear {
+                    LogManager.shared.log("Adhan_iOSApp: App launched (onAppear)")
                     // Request permissions on launch or defer to onboarding
                     locationManager.requestPermission()
                     notificationManager.requestAuthorization()
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    switch newPhase {
+                    case .background:
+                        LogManager.shared.log("Adhan_iOSApp: App entered background")
+                    case .active:
+                        LogManager.shared.log("Adhan_iOSApp: App became active")
+                    case .inactive:
+                        LogManager.shared.log("Adhan_iOSApp: App became inactive")
+                    @unknown default:
+                        LogManager.shared.log("Adhan_iOSApp: Unknown scene phase: \(newPhase)")
+                    }
                 }
         }
     }

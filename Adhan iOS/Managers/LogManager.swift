@@ -11,6 +11,12 @@ struct LogEntry: Identifiable, Codable {
         self.timestamp = Date()
         self.message = message
     }
+    
+    var formattedTimestamp: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+        return formatter.string(from: timestamp)
+    }
 }
 
 class LogManager: ObservableObject {

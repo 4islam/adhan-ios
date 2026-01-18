@@ -45,9 +45,15 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         content.title = title
         content.body = body
         // Note: For custom sounds in iOS notifications, the file must be in the app bundle.
-        // For now, we use a 30s short clip for the actual alert sound, 
-        // and the "PLAY_ADHAN" action will trigger the full audio via AudioManager.
-        content.sound = UNNotificationSound(named: UNNotificationSoundName("adhan_short.caf"))
+        // For now, we use a 30s short clip for the actual alert sound.
+        // If "adhan_short.caf" is not found in the bundle, we should fallback to default.
+        if Bundle.main.url(forResource: "adhan_short", withExtension: "caf") != nil {
+            content.sound = UNNotificationSound(named: UNNotificationSoundName("adhan_short.caf"))
+        } else {
+             // Fallback to default sound so the user at least hears something
+             content.sound = .default
+        }
+        
         content.categoryIdentifier = "PRAYER_ALERT"
         content.userInfo = [
             "PRAYER_TITLE": title,
@@ -58,19 +64,52 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
         
         let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(request)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                LogManager.shared.log("Notifications: Failed to schedule \(title): \(error.localizedDescription)")
+            } else {
+                LogManager.shared.log("Notifications: Scheduled \(title) at \(date.formatted(date: .omitted, time: .standard))")
+            }
+        }
+    }
+    
+    func logPendingNotifications() {
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            DispatchQueue.main.async {
+                LogManager.shared.log("--- PENDING NOTIFICATIONS AUDIT ---")
+                if requests.isEmpty {
+                    LogManager.shared.log("No pending notifications found.")
+                } else {
+                    for req in requests {
+                        var triggerInfo = "Unknown time"
+                        if let trig = req.trigger as? UNCalendarNotificationTrigger, let date = trig.nextTriggerDate() {
+                            triggerInfo = date.formatted(date: .omitted, time: .standard)
+                        } else if let trig = req.trigger as? UNTimeIntervalNotificationTrigger, let date = trig.nextTriggerDate() {
+                            triggerInfo = date.formatted(date: .omitted, time: .standard)
+                        }
+                        LogManager.shared.log("ID: \(req.identifier) | Trigger: \(triggerInfo)")
+                    }
+                }
+                LogManager.shared.log("-----------------------------------")
+            }
+        }
     }
     
     // MARK: - UNUserNotificationCenterDelegate
     
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        LogManager.shared.log("Notifications: willPresent called. App is FOREGROUND.")
         completionHandler([.banner, .sound])
     }
     
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        LogManager.shared.log("Notifications: didReceive called. ActionID: \(response.actionIdentifier)")
+        
         if response.actionIdentifier == "PLAY_ADHAN" {
-            let adhanFile = response.notification.request.content.userInfo["ADHAN_FILE"] as? String
-            LogManager.shared.log("Notifications: Received PLAY_ADHAN action. File: \(adhanFile ?? "nil")")
+            let userInfo = response.notification.request.content.userInfo
+            let adhanFile = userInfo["ADHAN_FILE"] as? String
+            LogManager.shared.log("Notifications: Payload: \(userInfo)")
+            
             // Tell AudioManager to play the specific audio selected
             AudioManager.shared.playAdhan(fileName: adhanFile)
         }

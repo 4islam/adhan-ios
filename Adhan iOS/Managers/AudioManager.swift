@@ -21,6 +21,8 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
     
     @objc private func handleRouteChange(notification: Notification) {
+        let routeDesc = AVAudioSession.sharedInstance().currentRoute
+        LogManager.shared.log("AudioManager: Route change detected. Route: \(routeDesc). Reason: \(String(describing: notification.userInfo?[AVAudioSessionRouteChangeReasonKey]))")
         DispatchQueue.main.async {
             self.updateCurrentRoute()
         }
@@ -32,9 +34,12 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         if let output = outputs.first {
             currentRoute = output.portName
         }
+        LogManager.shared.log("AudioManager: Current Route: \(currentRoute)")
     }
     
     func playAdhan(fileName: String? = nil, prayerName: String? = nil) {
+        LogManager.shared.log("AudioManager: playAdhan called. File: \(String(describing: fileName)), Prayer: \(String(describing: prayerName))")
+        
         // Precedence: fileName > prayerName match > default
         var chosenFile = fileName ?? "adhan_regular"
         
@@ -68,25 +73,36 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         
         do {
             let session = AVAudioSession.sharedInstance()
+            LogManager.shared.log("AudioManager: Activating session...")
             
             // Apply Audio Output Setting
             let preferSpeaker = UserDefaults.standard.bool(forKey: "preferInternalSpeaker")
             
             if preferSpeaker {
                 try session.setCategory(.playback, mode: .default, options: [.defaultToSpeaker, .duckOthers])
+                LogManager.shared.log("AudioManager: Category set to Playback (Speaker)")
             } else {
                 // Allows Bluetooth/AirPlay to take lead if connected
                 try session.setCategory(.playback, mode: .default, options: [.allowBluetoothA2DP, .allowAirPlay, .duckOthers])
+                LogManager.shared.log("AudioManager: Category set to Playback (Bluetooth Allowed)")
             }
             
             try session.setActive(true)
+            LogManager.shared.log("AudioManager: Session active.")
             
             player = try AVAudioPlayer(contentsOf: url)
             player?.delegate = self
-            player?.play()
-            isPlaying = true
-            updateCurrentRoute()
-            LogManager.shared.log("AudioManager: Playing \(chosenFile)")
+            
+            if player?.prepareToPlay() == true {
+                 player?.play()
+                 isPlaying = true
+                 updateCurrentRoute()
+                 LogManager.shared.log("AudioManager: Playing \(chosenFile) (Duration: \(player?.duration ?? 0))")
+            } else {
+                 let msg = "AudioManager: prepareToPlay() failed."
+                 print(msg)
+                 LogManager.shared.log(msg)
+            }
         } catch {
             let msg = "AudioManager: Playback failed: \(error.localizedDescription)"
             print(msg)
@@ -95,6 +111,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
     
     func stop() {
+        LogManager.shared.log("AudioManager: Stop requested.")
         player?.stop()
         isPlaying = false
         deactivateSession()
@@ -103,6 +120,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     private func deactivateSession() {
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            LogManager.shared.log("AudioManager: Session deactivated.")
         } catch {
             let msg = "AudioManager: Failed to deactivate session: \(error.localizedDescription)"
             print(msg)
@@ -111,6 +129,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
     
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        LogManager.shared.log("AudioManager: Finished playing. Success: \(flag)")
         isPlaying = false
         deactivateSession()
     }

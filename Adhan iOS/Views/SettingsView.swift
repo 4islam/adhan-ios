@@ -180,15 +180,15 @@ struct SettingsView: View {
             }
             
             Section(header: Text("Testing")) {
-                Button("Test Background Adhan (1 min)") {
-                    // Schedule for 1 minute from now
-                    let testDate = Date().addingTimeInterval(60)
+                Button("Test Background Adhan (2 min)") {
+                    // Schedule a fake adhan 2 minutes from now
+                    let testDate = Date().addingTimeInterval(120)
                     NotificationManager.shared.schedulePrayerNotification(
-                        id: "TEST_ADHAN",
+                        id: "test_adhan",
                         title: "Test Adhan",
-                        body: "This is a test of the background playback.",
+                        body: "Testing background playback",
                         date: testDate,
-                        soundName: adhanDhuhr // Use default or selected Dhuhr sound
+                        soundName: "adhan_regular"
                     )
                     showingTestAlert = true
                 }
@@ -202,7 +202,7 @@ struct SettingsView: View {
         .alert("Adhan Scheduled", isPresented: $showingTestAlert) {
             Button("OK", role:.cancel) { }
         } message: {
-            Text("A test Adhan has been scheduled for 1 minute from now.\n\nPlease LOCK your screen immediately to test background playback.")
+            Text("A test Adhan has been scheduled for 2 minutes from now.\n\nPlease LOCK your screen immediately to test background playback.")
         }
 
         .sheet(isPresented: $showingDocumentPicker) {
@@ -228,7 +228,7 @@ struct LogsView: View {
                         Text(log.message)
                             .font(.body)
                             .foregroundColor(.primary)
-                        Text(log.timestamp, style: .date) + Text(" at ") + Text(log.timestamp, style: .time)
+                        Text(log.formattedTimestamp)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -239,8 +239,13 @@ struct LogsView: View {
         .navigationTitle("Error Logs")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Clear") {
-                    logManager.clearLogs()
+                HStack {
+                    Button("Audit") {
+                        NotificationManager.shared.logPendingNotifications()
+                    }
+                    Button("Clear") {
+                        logManager.clearLogs()
+                    }
                 }
             }
         }
