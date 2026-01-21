@@ -55,6 +55,7 @@ class DashboardViewModel: ObservableObject {
     @Published var isNotificationsAuthorized: Bool = false
     
     private var timer: AnyCancellable?
+    private var cancellables = Set<AnyCancellable>()
     
     // User Settings
     @AppStorage("calcMethod") private var startCalcMethod: Int = PrayerTimes.CalculationMethod.ahmadiyya.rawValue
@@ -117,6 +118,18 @@ class DashboardViewModel: ObservableObject {
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
             self?.endBackgroundPersistence()
         }
+        
+        // Listen for Location Changes (Significant)
+        LocationManager.shared.$location
+            .compactMap { $0 } // Filter nils
+            .removeDuplicates()
+            .debounce(for: .seconds(2), scheduler: RunLoop.main) // Debounce rapid GPS updates
+            .sink { [weak self] _ in
+                print("DashboardViewModel: Location updated! Recalculating schedule...")
+                self?.lastCalculationDate = nil // Force recalculation bypass logic
+                self?.updateTime() // This will call scheduleNotifications
+            }
+            .store(in: &cancellables)
     }
     
     private func handleTimerTick() {
