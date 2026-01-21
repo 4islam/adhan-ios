@@ -61,10 +61,13 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         content.title = "Test Adhan"
         content.body = "Testing background playback"
         
-        if Bundle.main.url(forResource: "adhan_short", withExtension: "caf") != nil {
-            content.sound = UNNotificationSound(named: UNNotificationSoundName("adhan_short.caf"))
+        // Changed to .wav for easier Xcode import
+        if Bundle.main.url(forResource: "adhan_short", withExtension: "wav") != nil {
+            content.sound = UNNotificationSound(named: UNNotificationSoundName("adhan_short.wav"))
+            LogManager.shared.log("Notifications: Found adhan_short.wav, using custom sound.")
         } else {
              content.sound = .default
+             LogManager.shared.log("Notifications: adhan_short.wav NOT found in bundle. Using default sound.")
         }
         
         content.categoryIdentifier = "PRAYER_ALERT"
@@ -83,6 +86,24 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             } else {
                 LogManager.shared.log("Notifications: Scheduled Test Adhan in \(seconds) seconds")
             }
+        }
+    }
+    
+    func scheduleDefaultSoundTest(seconds: TimeInterval) {
+        let content = UNMutableNotificationContent()
+        content.title = "Test (System Sound)"
+        content.body = "If you hear this beep, notifications work."
+        content.sound = .default
+        
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
+        let request = UNNotificationRequest(identifier: "test_default", content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+             if let error = error {
+                 LogManager.shared.log("Notifications: Failed Default Test: \(error)")
+             } else {
+                 LogManager.shared.log("Notifications: Scheduled Default Sound Test in \(seconds)s")
+             }
         }
     }
 
