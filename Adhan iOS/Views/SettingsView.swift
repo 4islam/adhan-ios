@@ -185,8 +185,8 @@ struct SettingsView: View {
                 }
                 .foregroundColor(.blue)
                 
-                Button("Play Notification Sound (29s)") {
-                    AudioManager.shared.playAdhan(fileName: "adhan_short.wav")
+                Button("Play Chunk 1 (Verify Audio)") {
+                    AudioManager.shared.playAdhan(fileName: "adhan_regular_01.caf")
                 }
                 .foregroundColor(.cyan)
                 
@@ -203,6 +203,11 @@ struct SettingsView: View {
                     showingTestAlert = true
                 }
                 .foregroundColor(.red)
+                
+                Button("Test Adhan Chain (10s)") {
+                   PrayerNotificationManager.shared.testChainNow()
+                }
+                .foregroundColor(.purple)
                 
                 Button("Test Default Sound (10s)") {
                     NotificationManager.shared.scheduleDefaultSoundTest(seconds: 10)

@@ -166,7 +166,25 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         LogManager.shared.log("Notifications: willPresent called. App is FOREGROUND.")
-        completionHandler([.banner, .sound])
+        
+        // Manual Playback Handoff:
+        // System notification sound in foreground can be unreliable or ducked.
+        // Since we are in the foreground, we play the audio directly via AudioManager for full control.
+        
+        let userInfo = notification.request.content.userInfo
+        
+        // Try to get specific file from payload, otherwise default
+        if let adhanFile = userInfo["ADHAN_FILE"] as? String {
+             LogManager.shared.log("Notifications: Manual Foreground Playback -> \(adhanFile)")
+             AudioManager.shared.playAdhan(fileName: adhanFile)
+        } else {
+             // Fallback if no specific file linked
+             LogManager.shared.log("Notifications: Manual Foreground Playback -> adhan_regular")
+             AudioManager.shared.playAdhan(fileName: "adhan_regular")
+        }
+        
+        // Show banner, but DO NOT play system sound (to avoid double audio or truncation)
+        completionHandler([.banner, .list]) 
     }
     
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {

@@ -52,7 +52,19 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         var fileURL: URL?
         
         // Try Bundle first for internal ones
-        if let bundleURL = Bundle.main.url(forResource: chosenFile, withExtension: "mp3") {
+        // Logic: If fileName contains extension, use it. Else default to mp3.
+        var ext = "mp3"
+        var name = chosenFile
+        
+        if chosenFile.contains(".") {
+             let parts = chosenFile.components(separatedBy: ".")
+             if parts.count > 1 {
+                 name = parts[0]
+                 ext = parts[1] // e.g. "caf"
+             }
+        }
+        
+        if let bundleURL = Bundle.main.url(forResource: name, withExtension: ext) {
             fileURL = bundleURL
         } else {
             // Try Documents directory for custom ones

@@ -6,7 +6,41 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D98E451D2F21989000F76CE2 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D98E451C2F21989000F76CE2 /* WidgetKit.framework */; };
+		D98E451F2F21989000F76CE2 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D98E451E2F21989000F76CE2 /* SwiftUI.framework */; };
+		D98E45302F21989100F76CE2 /* AdhanWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D98E451A2F21989000F76CE2 /* AdhanWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D98E452E2F21989100F76CE2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D9B3C5CD2F1C3B610025CCCA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D98E45192F21989000F76CE2;
+			remoteInfo = AdhanWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D98E45352F21989100F76CE2 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D98E45302F21989100F76CE2 /* AdhanWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		D98E451A2F21989000F76CE2 /* AdhanWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AdhanWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D98E451C2F21989000F76CE2 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		D98E451E2F21989000F76CE2 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		D98E45372F219A5000F76CE2 /* AdhanWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AdhanWidgetExtension.entitlements; sourceTree = "<group>"; };
 		D9B3C5D52F1C3B610025CCCA /* Adhan iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Adhan iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -18,9 +52,24 @@
 			);
 			target = D9B3C5D42F1C3B610025CCCA /* Adhan iOS */;
 		};
+		D98E45342F21989100F76CE2 /* Exceptions for "AdhanWidget" folder in "AdhanWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D98E45192F21989000F76CE2 /* AdhanWidgetExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		D98E45202F21989000F76CE2 /* AdhanWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D98E45342F21989100F76CE2 /* Exceptions for "AdhanWidget" folder in "AdhanWidgetExtension" target */,
+			);
+			path = AdhanWidget;
+			sourceTree = "<group>";
+		};
 		D9B3C5D72F1C3B610025CCCA /* Adhan iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -32,6 +81,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		D98E45172F21989000F76CE2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D98E451F2F21989000F76CE2 /* SwiftUI.framework in Frameworks */,
+				D98E451D2F21989000F76CE2 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D9B3C5D22F1C3B610025CCCA /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -42,10 +100,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		D98E451B2F21989000F76CE2 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				D98E451C2F21989000F76CE2 /* WidgetKit.framework */,
+				D98E451E2F21989000F76CE2 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		D9B3C5CC2F1C3B610025CCCA = {
 			isa = PBXGroup;
 			children = (
+				D98E45372F219A5000F76CE2 /* AdhanWidgetExtension.entitlements */,
 				D9B3C5D72F1C3B610025CCCA /* Adhan iOS */,
+				D98E45202F21989000F76CE2 /* AdhanWidget */,
+				D98E451B2F21989000F76CE2 /* Frameworks */,
 				D9B3C5D62F1C3B610025CCCA /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,6 +124,7 @@
 			isa = PBXGroup;
 			children = (
 				D9B3C5D52F1C3B610025CCCA /* Adhan iOS.app */,
+				D98E451A2F21989000F76CE2 /* AdhanWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,6 +132,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		D98E45192F21989000F76CE2 /* AdhanWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D98E45312F21989100F76CE2 /* Build configuration list for PBXNativeTarget "AdhanWidgetExtension" */;
+			buildPhases = (
+				D98E45162F21989000F76CE2 /* Sources */,
+				D98E45172F21989000F76CE2 /* Frameworks */,
+				D98E45182F21989000F76CE2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D98E45202F21989000F76CE2 /* AdhanWidget */,
+			);
+			name = AdhanWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = AdhanWidgetExtension;
+			productReference = D98E451A2F21989000F76CE2 /* AdhanWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		D9B3C5D42F1C3B610025CCCA /* Adhan iOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D9B3C5E02F1C3B620025CCCA /* Build configuration list for PBXNativeTarget "Adhan iOS" */;
@@ -68,10 +161,12 @@
 				D9B3C5D12F1C3B610025CCCA /* Sources */,
 				D9B3C5D22F1C3B610025CCCA /* Frameworks */,
 				D9B3C5D32F1C3B610025CCCA /* Resources */,
+				D98E45352F21989100F76CE2 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D98E452F2F21989100F76CE2 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				D9B3C5D72F1C3B610025CCCA /* Adhan iOS */,
@@ -93,6 +188,9 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					D98E45192F21989000F76CE2 = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					D9B3C5D42F1C3B610025CCCA = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -113,11 +211,19 @@
 			projectRoot = "";
 			targets = (
 				D9B3C5D42F1C3B610025CCCA /* Adhan iOS */,
+				D98E45192F21989000F76CE2 /* AdhanWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		D98E45182F21989000F76CE2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D9B3C5D32F1C3B610025CCCA /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -128,6 +234,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		D98E45162F21989000F76CE2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D9B3C5D12F1C3B610025CCCA /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,7 +250,77 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		D98E452F2F21989100F76CE2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D98E45192F21989000F76CE2 /* AdhanWidgetExtension */;
+			targetProxy = D98E452E2F21989100F76CE2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		D98E45322F21989100F76CE2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = AdhanWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TRCMR4M9KF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AdhanWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AdhanWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "ai.ntrust.adhan.Adhan-iOS.AdhanWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D98E45332F21989100F76CE2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = AdhanWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TRCMR4M9KF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AdhanWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = AdhanWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "ai.ntrust.adhan.Adhan-iOS.AdhanWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		D9B3C5DE2F1C3B620025CCCA /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -264,6 +447,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Adhan iOS/Adhan iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TRCMR4M9KF;
@@ -298,6 +482,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Adhan iOS/Adhan iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TRCMR4M9KF;
@@ -330,6 +515,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		D98E45312F21989100F76CE2 /* Build configuration list for PBXNativeTarget "AdhanWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D98E45322F21989100F76CE2 /* Debug */,
+				D98E45332F21989100F76CE2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		D9B3C5D02F1C3B610025CCCA /* Build configuration list for PBXProject "Adhan iOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

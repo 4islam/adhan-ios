@@ -25,9 +25,14 @@ class LogManager: ObservableObject {
     @Published var logs: [LogEntry] = []
     
     private let storageKey = "ApplicationLogs"
+    private let suiteName = "group.adhan.ntrust.ai"
     
     private init() {
         loadLogs()
+    }
+    
+    private var defaults: UserDefaults {
+        return UserDefaults(suiteName: suiteName) ?? .standard
     }
     
     func log(_ message: String) {
@@ -46,12 +51,12 @@ class LogManager: ObservableObject {
     
     private func saveLogs() {
         if let encoded = try? JSONEncoder().encode(logs) {
-            UserDefaults.standard.set(encoded, forKey: storageKey)
+            defaults.set(encoded, forKey: storageKey)
         }
     }
     
     private func loadLogs() {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
+        if let data = defaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([LogEntry].self, from: data) {
             self.logs = decoded
         }
