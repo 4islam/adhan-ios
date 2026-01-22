@@ -19,6 +19,7 @@ struct SettingsView: View {
     @AppStorage("combineShortNightEnabled") private var combineShortNightEnabled: Bool = true
     @AppStorage("shortNightDuration") private var shortNightDuration: Double = 9.0
     @AppStorage("preferInternalSpeaker") private var preferInternalSpeaker: Bool = false
+    @AppStorage("adhanVolume") private var adhanVolume: Double = 1.0
     
     @ObservedObject var audioManager = AudioManager.shared
     
@@ -103,6 +104,28 @@ struct SettingsView: View {
                 Toggle("Always Play on Speaker", isOn: $preferInternalSpeaker)
                 Text("If enabled, the Adhan will attempt to bypass Bluetooth and use the phone's built-in speakers.")
                     .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            
+            Section(header: Text("Adhan Volume")) {
+                VStack {
+                    HStack {
+                        Image(systemName: "speaker.fill")
+                        Slider(value: Binding(
+                            get: { self.adhanVolume },
+                            set: { newValue in
+                                self.adhanVolume = newValue
+                                // Real-time preview if audio is playing? Not critical, but user might want it.
+                            }
+                        ), in: 0.0...1.0)
+                        Image(systemName: "speaker.wave.3.fill")
+                    }
+                    Text("Volume: \(Int(adhanVolume * 100))%")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Text("This sets the maximum volume for the Adhan within the app. It will play relative to your phone's system volume.")
+                    .font(.caption)
                     .foregroundColor(.secondary)
             }
             

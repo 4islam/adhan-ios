@@ -141,20 +141,25 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                      }
                  }
                  
+                 // Global Volume Override (User Preference)
+                 let globalVolume = Float(UserDefaults.standard.double(forKey: "adhanVolume"))
+                 // Default to 1.0 if not set (or 0.0 means user muted app specifically, but standard default for double is 0.0 so we need checking)
+                 let targetVolume: Float = (UserDefaults.standard.object(forKey: "adhanVolume") != nil) ? globalVolume : 1.0
+                 
                  // Apply valid volume
                  player?.volume = initialVol
                  player?.play()
                  
                  // specific handling for "no fade" (duration 0)
                  if fadeDuration > 0 {
-                     startFadeIn(duration: fadeDuration, startVolume: initialVol)
+                     startFadeIn(duration: fadeDuration, startVolume: initialVol, targetVolume: targetVolume)
                  } else {
-                     player?.volume = 1.0 // Instant full volume
+                     player?.volume = targetVolume // Instant user-defined volume
                  }
                  
                  isPlaying = true
                  updateCurrentRoute()
-                 LogManager.shared.log("AudioManager: Playing \(chosenFile) (Vol: \(initialVol) -> 1.0 over \(fadeDuration)s)")
+                 LogManager.shared.log("AudioManager: Playing \(chosenFile) (Vol: \(initialVol) -> \(targetVolume) over \(fadeDuration)s)")
             } else {
                  let msg = "AudioManager: prepareToPlay() failed."
                  print(msg)
@@ -167,21 +172,27 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
     
-    private func startFadeIn(duration: TimeInterval, startVolume: Float) {
+    private func startFadeIn(duration: TimeInterval, startVolume: Float, targetVolume: Float) {
         // Cancel any existing timer
         fadeTimer?.invalidate()
         
         guard duration > 0 else {
-            player?.volume = 1.0
+            player?.volume = targetVolume
+            return
+        }
+        
+        // If start volume is already higher than target, just clamp
+        if startVolume >= targetVolume {
+            player?.volume = targetVolume
             return
         }
         
         let steps: Double = duration * 10 // Update every 0.1s
         let stepInterval = 0.1
-        let volumeRange = 1.0 - startVolume
+        let volumeRange = targetVolume - startVolume
         let volumeIncrement = volumeRange / Float(steps)
         
-        LogManager.shared.log("AudioManager: Starting fade-in from \(startVolume) over \(duration)s")
+        LogManager.shared.log("AudioManager: Starting fade-in from \(startVolume) to \(targetVolume) over \(duration)s")
         
         fadeTimer = Timer.scheduledTimer(withTimeInterval: stepInterval, repeats: true) { [weak self] timer in
             guard let self = self, let player = self.player else {
@@ -189,9 +200,9 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 return
             }
             
-            if player.volume < 1.0 {
-                // Ensure we don't float-overflow past 1.0
-                player.volume = min(1.0, player.volume + volumeIncrement)
+            if player.volume < targetVolume {
+                // Ensure we don't float-overflow past target
+                player.volume = min(targetVolume, player.volume + volumeIncrement)
             } else {
                 // Done
                 timer.invalidate()
