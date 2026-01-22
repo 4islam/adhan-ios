@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import AVFoundation
+import BackgroundTasks
 
 @main
 struct Adhan_iOSApp: App {
@@ -14,8 +14,12 @@ struct Adhan_iOSApp: App {
     @StateObject private var notificationManager = NotificationManager.shared
     @StateObject private var audioManager = AudioManager.shared
     
+    // Background Task Identifier
+    let backgroundTaskID = "ai.ntrust.adhan.refresh"
+    
     init() {
         setupAudioSession()
+        registerBackgroundTask()
     }
     
     private func setupAudioSession() {
@@ -25,6 +29,54 @@ struct Adhan_iOSApp: App {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             print("Failed to setup audio session: \(error)")
+        }
+    }
+    
+    private func registerBackgroundTask() {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: backgroundTaskID, using: nil) { task in
+            guard let task = task as? BGAppRefreshTask else { return }
+            handleAppRefresh(task: task)
+        }
+    }
+    
+    private func handleAppRefresh(task: BGAppRefreshTask) {
+        // Schedule the next refresh
+        scheduleAppRefresh()
+        
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        
+        task.expirationHandler = {
+            queue.cancelAllOperations()
+        }
+        
+        let operation = BlockOperation {
+            LogManager.shared.log("BGTask: Performing background refresh...")
+            
+            if let loc = LocationManager.shared.location {
+                PrayerNotificationManager.shared.refillQueue(location: loc)
+                LogManager.shared.log("BGTask: Queue Refill Initiated.")
+                task.setTaskCompleted(success: true)
+            } else {
+                 LogManager.shared.log("BGTask: Failed - No cached location.")
+                 task.setTaskCompleted(success: false)
+            }
+        }
+        
+        queue.addOperation(operation)
+    }
+    
+    private func scheduleAppRefresh() {
+        let request = BGAppRefreshTaskRequest(identifier: backgroundTaskID)
+        // Refresh 4 times a day (every 6 hours) roughly, or just daily.
+        // User asked for "if user does not move for a few days". Daily is fine.
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 12 * 60 * 60) // 12 hours
+        
+        do {
+            try BGTaskScheduler.shared.submit(request)
+            LogManager.shared.log("BGTask: Scheduled next refresh for 12h from now.")
+        } catch {
+            LogManager.shared.log("BGTask: Could not schedule app refresh: \(error)")
         }
     }
     
@@ -46,6 +98,7 @@ struct Adhan_iOSApp: App {
                     switch newPhase {
                     case .background:
                         LogManager.shared.log("Adhan_iOSApp: App entered background")
+                        scheduleAppRefresh() // Schedule on exit
                     case .active:
                         LogManager.shared.log("Adhan_iOSApp: App became active")
                         notificationManager.checkAuthorizationStatus()

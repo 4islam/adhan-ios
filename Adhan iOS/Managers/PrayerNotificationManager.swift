@@ -77,6 +77,124 @@ class PrayerNotificationManager: NSObject {
         LogManager.shared.log("PrayerManager: Test Button Pressed. Checking auth...")
         // Schedule test chain starting 10 seconds from now
         let now = Date().addingTimeInterval(10)
-        scheduleAdhanChain(startTime: now, prayerName: "Test Chain")
+    }
+    
+    // MARK: - Background Queue Refill (Stationary Batch)
+    
+    func refillQueue(location: CLLocation) {
+        LogManager.shared.log("PrayerManager: Refilling notification queue...")
+        
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else {
+                LogManager.shared.log("PrayerManager: Cannot refill. Notifications not authorized.")
+                return
+            }
+            
+            // 1. Calculate Times for Today and Tomorrow
+            let calendar = Calendar.current
+            let today = Date()
+            
+            // We schedule for Today (remaining) and Tomorrow (full)
+            // This ensures ~1.5 - 2 days coverage
+            for dayOffset in 0...1 {
+                guard let targetDate = calendar.date(byAdding: .day, value: dayOffset, to: today) else { continue }
+                self.scheduleForDate(date: targetDate, location: location)
+            }
+        }
+    }
+    
+    private func scheduleForDate(date: Date, location: CLLocation) {
+        // Instantiate Logic (Mirrors DashboardViewModel)
+        let pt = PrayerTimes()
+        
+        // Load Preferences (Manual UserDefaults since @AppStorage isn't here)
+        let defaults = UserDefaults.standard
+        let calcMethod = defaults.integer(forKey: "calcMethod") // Default 0 if missing
+        let asrHanafi = defaults.bool(forKey: "asrForHanafi")
+        let highLatMethod = defaults.integer(forKey: "highLatMethod")
+        
+        if let method = PrayerTimes.CalculationMethod(rawValue: calcMethod) {
+            pt.setCalcMethod(method)
+        }
+        pt.setAsrMethod(asrHanafi ? .hanafi : .shafii)
+        if let highLat = PrayerTimes.HighLatMethod(rawValue: highLatMethod) {
+            pt.setHighLatsMethod(highLat)
+        }
+        pt.setTimeFormat(.float)
+        
+        // Set Coords
+        pt.lat = location.coordinate.latitude
+        pt.lng = location.coordinate.longitude
+        // Timezone
+        pt.timeZone = pt.effectiveTimeZone(
+            year: Calendar.current.component(.year, from: date),
+            month: Calendar.current.component(.month, from: date),
+            day: Calendar.current.component(.day, from: date),
+            timeZone: nil
+        )
+        
+        // Calculate
+        let floatTimes = pt.getPrayerTimes(
+            date: date,
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude
+        )
+        
+        // Map to Names
+        // [Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib, Isha]
+        // Indices: 0, 1, 2, 3, 4, 5, 6
+        let names = ["Fajr", "Sunrise", "Dhuhr", "Asr", "Sunset", "Maghrib", "Isha"]
+        let validIndices = [0, 2, 3, 5, 6] // Skip Sunrise/Sunset for Adhan
+        
+        let now = Date()
+        
+        for idx in validIndices {
+            guard idx < floatTimes.count else { continue }
+            let floatTime = Double(floatTimes[idx])
+            
+            // Offsets
+            var offset: Double = 0
+            if idx == 0 { offset = defaults.double(forKey: "fajrOffset") }
+            else if idx == 5 { offset = defaults.double(forKey: "maghribOffset") }
+            else if idx == 6 { offset = defaults.double(forKey: "ishaOffset") }
+            
+            // Adjust time
+            let adjustedTime = (floatTime + offset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+            
+            // Convert to Date
+            let hour = Int(adjustedTime)
+            let minute = Int((adjustedTime - Double(hour)) * 60)
+            let second = Int(((adjustedTime * 60) - floor(adjustedTime * 60)) * 60)
+            
+            var components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+            components.hour = hour
+            components.minute = minute
+            components.second = second
+            
+            if let prayerDate = Calendar.current.date(from: components) {
+                // Determine Audio Preference
+                let name = names[idx]
+                let prefKey = "adhan_\(name.lowercased())"
+                let soundName = defaults.string(forKey: prefKey) ?? "adhan_regular"
+                
+                // Only schedule if in future
+                if prayerDate > now {
+                    if soundName == "adhan_regular" || soundName == "adhan_fajr" {
+                        let type = (soundName == "adhan_fajr") ? "fajr" : "regular"
+                        scheduleAdhanChain(startTime: prayerDate, prayerName: name, adhanType: type)
+                    } else {
+                        // Fallback Legacy
+                        NotificationManager.shared.schedulePrayerNotification(
+                            id: "prayer_\(name)",
+                            title: "\(name) Prayer",
+                            body: "It is time for \(name) prayer.",
+                            date: prayerDate,
+                            soundName: soundName
+                        )
+                    }
+                }
+            }
+        }
     }
 }

@@ -74,9 +74,11 @@ struct QiblaView: View {
         }
         .onAppear {
             locationManager.startUpdating()
+            locationManager.startHeadingUpdates()
         }
         .onDisappear {
-            locationManager.stopUpdating()
+            // We don't stop location (might be needed by dashboard) but definitely stop heading
+            locationManager.stopHeadingUpdates()
         }
     }
     

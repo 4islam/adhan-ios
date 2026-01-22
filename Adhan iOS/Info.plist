@@ -24,7 +24,13 @@
 	<array>
 		<string>audio</string>
 		<string>location</string>
+        <string>fetch</string>
+        <string>processing</string>
 	</array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>ai.ntrust.adhan.refresh</string>
+    </array>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>Adhan iOS needs your location to calculate accurate prayer times and send notifications even when the app is closed.</string>
     <key>NSLocationWhenInUseUsageDescription</key>

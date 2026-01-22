@@ -33,13 +33,22 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             manager.showsBackgroundLocationIndicator = false
             
             // Significant Location Change is most battery efficient
+            // Significant Location Change is most battery efficient
             manager.startMonitoringSignificantLocationChanges()
-            manager.startUpdatingHeading()
+            // NB: Heading is NOT started by default to save battery
         }
     }
     
     func stopUpdating() {
         manager.stopUpdatingLocation()
+        manager.stopUpdatingHeading()
+    }
+    
+    func startHeadingUpdates() {
+        manager.startUpdatingHeading()
+    }
+    
+    func stopHeadingUpdates() {
         manager.stopUpdatingHeading()
     }
     

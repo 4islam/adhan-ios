@@ -209,6 +209,10 @@ struct LocationMapView: View {
                 // Default to a closer zoom (1000m altitude/distance) on load
                 position = .camera(MapCamera(centerCoordinate: userLoc, distance: 1000))
             }
+            locationManager.startHeadingUpdates()
+        }
+        .onDisappear {
+            locationManager.stopHeadingUpdates()
         }
     }
     
