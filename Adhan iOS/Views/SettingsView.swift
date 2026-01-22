@@ -64,6 +64,16 @@ struct SettingsView: View {
                 Text("Dhuhr/Asr or Maghrib/Isha will be marked as Combined if the gap is less than this threshold.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                
+                Divider().padding(.vertical, 4)
+                
+                Toggle("Combine if Short Night", isOn: $combineShortNightEnabled)
+                if combineShortNightEnabled {
+                    Stepper("Night Threshold: \(String(format: "%.1f", shortNightDuration))h", value: $shortNightDuration, in: 1...12, step: 0.5)
+                    Text("If time between Isha and Fajr is less than this, Maghrib & Isha will combine.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             
             Section(header: Text("Audio Device & Route")) {

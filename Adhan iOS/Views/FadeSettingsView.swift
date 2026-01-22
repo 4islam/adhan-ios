@@ -4,16 +4,16 @@ struct FadeSettingsView: View {
     @AppStorage("fade_fajr_duration") private var fadeFajrDuration: Double = 5.0
     @AppStorage("fade_fajr_volume") private var fadeFajrVolume: Double = 0.0
     
-    @AppStorage("fade_dhuhr_duration") private var fadeDhuhrDuration: Double = 5.0
+    @AppStorage("fade_dhuhr_duration") private var fadeDhuhrDuration: Double = 0.0
     @AppStorage("fade_dhuhr_volume") private var fadeDhuhrVolume: Double = 0.0
     
-    @AppStorage("fade_asr_duration") private var fadeAsrDuration: Double = 5.0
+    @AppStorage("fade_asr_duration") private var fadeAsrDuration: Double = 0.0
     @AppStorage("fade_asr_volume") private var fadeAsrVolume: Double = 0.0
     
-    @AppStorage("fade_maghrib_duration") private var fadeMaghribDuration: Double = 5.0
+    @AppStorage("fade_maghrib_duration") private var fadeMaghribDuration: Double = 0.0
     @AppStorage("fade_maghrib_volume") private var fadeMaghribVolume: Double = 0.0
     
-    @AppStorage("fade_isha_duration") private var fadeIshaDuration: Double = 5.0
+    @AppStorage("fade_isha_duration") private var fadeIshaDuration: Double = 0.0
     @AppStorage("fade_isha_volume") private var fadeIshaVolume: Double = 0.0
     
     let prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
@@ -66,16 +66,16 @@ struct FadeDetailView: View {
     @AppStorage("fade_fajr_duration") private var fadeFajrDuration: Double = 5.0
     @AppStorage("fade_fajr_volume") private var fadeFajrVolume: Double = 0.0
     
-    @AppStorage("fade_dhuhr_duration") private var fadeDhuhrDuration: Double = 5.0
+    @AppStorage("fade_dhuhr_duration") private var fadeDhuhrDuration: Double = 0.0
     @AppStorage("fade_dhuhr_volume") private var fadeDhuhrVolume: Double = 0.0
     
-    @AppStorage("fade_asr_duration") private var fadeAsrDuration: Double = 5.0
+    @AppStorage("fade_asr_duration") private var fadeAsrDuration: Double = 0.0
     @AppStorage("fade_asr_volume") private var fadeAsrVolume: Double = 0.0
     
-    @AppStorage("fade_maghrib_duration") private var fadeMaghribDuration: Double = 5.0
+    @AppStorage("fade_maghrib_duration") private var fadeMaghribDuration: Double = 0.0
     @AppStorage("fade_maghrib_volume") private var fadeMaghribVolume: Double = 0.0
     
-    @AppStorage("fade_isha_duration") private var fadeIshaDuration: Double = 5.0
+    @AppStorage("fade_isha_duration") private var fadeIshaDuration: Double = 0.0
     @AppStorage("fade_isha_volume") private var fadeIshaVolume: Double = 0.0
     
     var body: some View {

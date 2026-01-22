@@ -223,13 +223,20 @@ class DashboardViewModel: ObservableObject {
                 // Determine which Adhan file to use based on user preference
                 let adhanFile = getAdhanFile(for: name)
                 
-                NotificationManager.shared.schedulePrayerNotification(
-                    id: "prayer_\(name)",
-                    title: "\(name) Prayer",
-                    body: "It is time for \(name) prayer.",
-                    date: date,
-                    soundName: adhanFile // We'll update NotificationManager to accept this
-                )
+                if adhanFile == "adhan_regular" || adhanFile == "adhan_fajr" {
+                   // Use the new Chain Logic for full duration
+                   let type = (adhanFile == "adhan_fajr") ? "fajr" : "regular"
+                   PrayerNotificationManager.shared.scheduleAdhanChain(startTime: date, prayerName: name, adhanType: type)
+                } else {
+                   // Fallback for custom files (Legacy Single Notification)
+                   NotificationManager.shared.schedulePrayerNotification(
+                       id: "prayer_\(name)",
+                       title: "\(name) Prayer",
+                       body: "It is time for \(name) prayer.",
+                       date: date,
+                       soundName: adhanFile
+                   )
+                }
             }
         }
     }
