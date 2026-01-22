@@ -230,6 +230,16 @@ struct SettingsView: View {
                 }
                 .foregroundColor(.gray)
                 
+                Button("Reset & Reschedule All") {
+                    UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+                    // Small delay to ensure clear completes efficiently before rewrite (though API is async, usually fine)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        viewModel.updateTime() // This triggers scheduleNotifications internally
+                        LogManager.shared.log("Manual Reset: Notifications rescheduled.")
+                    }
+                }
+                .foregroundColor(.red)
+                
                 NavigationLink(destination: LogsView()) {
                     Text("View Error Logs")
                 }
