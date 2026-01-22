@@ -9,7 +9,7 @@ struct AdhanShortcuts: AppShortcutsProvider {
             phrases: [
                 "Play \(.applicationName)",
                 "Start Adhan in \(.applicationName)",
-                "Play Adhan"
+                "Play Adhan in \(.applicationName)"
             ],
             shortTitle: "Play Adhan",
             systemImageName: "speaker.wave.3.fill"

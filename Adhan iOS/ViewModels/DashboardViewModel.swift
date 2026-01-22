@@ -65,7 +65,7 @@ class DashboardViewModel: ObservableObject {
     
     // Phase 2 Settings
     @AppStorage("tahajjudOffset") private var tahajjudOffset: Double = 60 // minutes before Fajr
-    @AppStorage("combineThreshold") private var combineThreshold: Double = 30 // minutes gap
+    @AppStorage("combineThreshold") private var combineThreshold: Double = 70 // minutes gap
     @AppStorage("tahajjudEnabled") private var tahajjudEnabled: Bool = true
     
     // Offsets
@@ -77,8 +77,8 @@ class DashboardViewModel: ObservableObject {
     @AppStorage("adhan_fajr") private var adhanFajrPref: String = "adhan_fajr"
     @AppStorage("adhan_dhuhr") private var adhanDhuhrPref: String = "adhan_regular"
     @AppStorage("adhan_asr") private var adhanAsrPref: String = "adhan_regular"
-    @AppStorage("combineShortNightEnabled") private var combineShortNightEnabled: Bool = false
-    @AppStorage("shortNightDuration") private var shortNightDuration: Double = 5.0
+    @AppStorage("combineShortNightEnabled") private var combineShortNightEnabled: Bool = true
+    @AppStorage("shortNightDuration") private var shortNightDuration: Double = 9.0
     @AppStorage("adhan_maghrib") private var adhanMaghribPref: String = "adhan_regular"
     @AppStorage("adhan_isha") private var adhanIshaPref: String = "adhan_regular"
     
@@ -319,7 +319,8 @@ class DashboardViewModel: ObservableObject {
              }
         }
         
-        self.isCombinedDhuhrAsr = (asrFloat - dhuhrFloat) * 60.0 <= combineThreshold
+        let asrMaghribGap = (maghribFloat - asrFloat) * 60.0
+        self.isCombinedDhuhrAsr = ((asrFloat - dhuhrFloat) * 60.0 <= combineThreshold) || (asrMaghribGap <= combineThreshold)
         self.isCombinedMaghribIsha = isShortNight || ((ishaFloat - maghribFloat) * 60.0 <= combineThreshold)
         
         // 6. Format Strings for individual display
