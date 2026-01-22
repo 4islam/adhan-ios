@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import MediaPlayer // Required for MPVolumeView
 
 class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = AudioManager()
@@ -126,12 +127,13 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                  // Determine initial settings based on prayer
                  var initialVol: Float = 0.0
                  var fadeDuration: Double = 5.0
+                 var perPrayerMaxVol: Float? = nil
                  
                  if let prayer = prayerName {
                      // Keys match FadeSettingsView: "fade_{prayer}_volume", "fade_{prayer}_duration"
-                     // Default to 0.0 volume and 5.0 duration if not set
                      let volKey = "fade_\(prayer.lowercased())_volume"
                      let durKey = "fade_\(prayer.lowercased())_duration"
+                     let maxVolKey = "max_volume_\(prayer.lowercased())" // New key
                      
                      if UserDefaults.standard.object(forKey: volKey) != nil {
                          initialVol = Float(UserDefaults.standard.double(forKey: volKey))
@@ -139,27 +141,37 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                      if UserDefaults.standard.object(forKey: durKey) != nil {
                          fadeDuration = UserDefaults.standard.double(forKey: durKey)
                      }
+                     // Check for per-prayer max volume override
+                     if UserDefaults.standard.object(forKey: maxVolKey) != nil {
+                         perPrayerMaxVol = Float(UserDefaults.standard.double(forKey: maxVolKey))
+                     }
                  }
                  
                  // Global Volume Override (User Preference)
-                 let globalVolume = Float(UserDefaults.standard.double(forKey: "adhanVolume"))
-                 // Default to 1.0 if not set (or 0.0 means user muted app specifically, but standard default for double is 0.0 so we need checking)
-                 let targetVolume: Float = (UserDefaults.standard.object(forKey: "adhanVolume") != nil) ? globalVolume : 1.0
+                 let globalDefaults = Float(UserDefaults.standard.double(forKey: "adhanVolume"))
+                 let defaultGlobal = (UserDefaults.standard.object(forKey: "adhanVolume") != nil) ? globalDefaults : 1.0
                  
-                 // Apply valid volume
+                 // Priority: Per-Prayer Specific > Global Default
+                 let targetSystemVolume: Float = perPrayerMaxVol ?? defaultGlobal
+                 
+                 // FORCE SYSTEM VOLUME
+                 self.setSystemVolume(targetSystemVolume)
+                 
+                 // Player volume always 1.0 relative to the system volume we just set
                  player?.volume = initialVol
                  player?.play()
                  
                  // specific handling for "no fade" (duration 0)
                  if fadeDuration > 0 {
-                     startFadeIn(duration: fadeDuration, startVolume: initialVol, targetVolume: targetVolume)
+                     // We fade the PLAYER volume from 0 to 1, while System Volume stays high
+                     startFadeIn(duration: fadeDuration, startVolume: initialVol, targetVolume: 1.0)
                  } else {
-                     player?.volume = targetVolume // Instant user-defined volume
+                     player?.volume = 1.0 
                  }
                  
                  isPlaying = true
                  updateCurrentRoute()
-                 LogManager.shared.log("AudioManager: Playing \(chosenFile) (Vol: \(initialVol) -> \(targetVolume) over \(fadeDuration)s)")
+                 LogManager.shared.log("AudioManager: Playing \(chosenFile) (SysVol: \(targetSystemVolume), Fade: \(initialVol) -> 1.0 over \(fadeDuration)s)")
             } else {
                  let msg = "AudioManager: prepareToPlay() failed."
                  print(msg)
@@ -235,5 +247,23 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         fadeTimer?.invalidate()
         isPlaying = false
         deactivateSession()
+    }
+    
+    // MARK: - System Volume Control
+    // Note: This is a hacky workaround because iOS does not officially support setting system volume programmatically.
+    // It works by finding the UISlider within MPVolumeView.
+    
+    private func setSystemVolume(_ volume: Float) {
+        DispatchQueue.main.async {
+            let volumeView = MPVolumeView()
+            if let view = volumeView.subviews.first(where: { $0 is UISlider }) as? UISlider {
+                // Determine step (UI change)
+                // We add a tiny delay to ensure view hierarchy logic (even if offscreen) processes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                    view.value = volume
+                    LogManager.shared.log("AudioManager: System Volume forced to \(volume)")
+                }
+            }
+        }
     }
 }

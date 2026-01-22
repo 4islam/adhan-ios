@@ -111,21 +111,34 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        // Note: For custom sounds in iOS notifications, the file must be in the app bundle.
-        // For now, we use a 30s short clip for the actual alert sound.
-        // If "adhan_short.caf" is not found in the bundle, we should fallback to default.
-        if Bundle.main.url(forResource: "adhan_short", withExtension: "caf") != nil {
-            content.sound = UNNotificationSound(named: UNNotificationSoundName("adhan_short.caf"))
+        
+        let requestedSound = soundName ?? "adhan_regular"
+        
+        if requestedSound == "system_default" {
+            // Force system default beep (Tri-tone / Radar)
+            content.sound = .default
+        } else if requestedSound == "silent_vibrate" {
+            // nil sound means no audio file played.
+            // On iPhone: This triggers haptics if in Vibrate mode, or nothing if Ring mode (unless setting is changed).
+            // NOTE: UNNotificationSound(named: "silence.caf") with 100% vibration is better if we want FORCE vibration.
+            // But standard behavior for "None" is usually just visual.
+            // However, user asked for "Vibrations". NIL sound often just barely vibrates.
+            // A better hack for "Vibrate Only" is playing a silent audio file.
+            // But for now, let's respect standard "No Sound" behavior which allows User to set Haptics.
+            content.sound = nil 
         } else {
-             // Fallback to default sound so the user at least hears something
-             content.sound = .default
+            // Custom Adhan File or Short Clip
+            // If the requested sound is a full adhan file (e.g. adhan_fajr.caf), we might want to schedule the CHAIN if implementation allows,
+            // but this function is the "Legacy/Fallback" single-notification scheduler.
+            // So we play the file specified.
+            content.sound = UNNotificationSound(named: UNNotificationSoundName(requestedSound))
         }
         
         content.categoryIdentifier = "PRAYER_ALERT"
         content.userInfo = [
             "PRAYER_TITLE": title,
             "PRAYER_NAME": title, // Used for lookup of settings (fade/volume)
-            "ADHAN_FILE": soundName ?? "adhan_regular"
+            "ADHAN_FILE": requestedSound
         ]
         
         let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
@@ -136,7 +149,7 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             if let error = error {
                 LogManager.shared.log("Notifications: Failed to schedule \(title): \(error.localizedDescription)")
             } else {
-                LogManager.shared.log("Notifications: Scheduled \(title) at \(date.formatted(date: .omitted, time: .standard))")
+                LogManager.shared.log("Notifications: Scheduled \(title) at \(date.formatted(date: .omitted, time: .standard)) with sound: \(requestedSound)")
             }
         }
     }

@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import CoreLocation
 
 class PrayerNotificationManager: NSObject {
     static let shared = PrayerNotificationManager()
@@ -150,8 +151,7 @@ class PrayerNotificationManager: NSObject {
         let now = Date()
         
         for idx in validIndices {
-            guard idx < floatTimes.count else { continue }
-            let floatTime = Double(floatTimes[idx])
+            guard idx < floatTimes.count, let floatTime = Double(floatTimes[idx]) else { continue }
             
             // Offsets
             var offset: Double = 0
@@ -164,8 +164,10 @@ class PrayerNotificationManager: NSObject {
             
             // Convert to Date
             let hour = Int(adjustedTime)
-            let minute = Int((adjustedTime - Double(hour)) * 60)
-            let second = Int(((adjustedTime * 60) - floor(adjustedTime * 60)) * 60)
+            let remainderMinutes = (adjustedTime - Double(hour)) * 60
+            let minute = Int(remainderMinutes)
+            let remainderSeconds = (remainderMinutes - Double(minute)) * 60
+            let second = Int(remainderSeconds)
             
             var components = Calendar.current.dateComponents([.year, .month, .day], from: date)
             components.hour = hour

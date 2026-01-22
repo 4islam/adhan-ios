@@ -28,9 +28,20 @@ struct SettingsView: View {
     @AppStorage("adhan_dhuhr") private var adhanDhuhr: String = "adhan_regular"
     @AppStorage("adhan_asr") private var adhanAsr: String = "adhan_regular"
     @AppStorage("adhan_maghrib") private var adhanMaghrib: String = "adhan_regular"
+    @AppStorage("adhan_maghrib") private var adhanMaghrib: String = "adhan_regular"
     @AppStorage("adhan_isha") private var adhanIsha: String = "adhan_regular"
+    @AppStorage("adhan_tahajjud") private var adhanTahajjud: String = "adhan_fajr"
     
-    let adhanOptions = ["adhan_regular", "adhan_fajr"] // Dynamically could be improved but sufficient for now
+    let adhanOptions = ["adhan_regular", "adhan_fajr"]
+    let alertOptions = ["system_default", "silent_vibrate", "adhan_fajr", "adhan_regular"]
+    
+    func formatOption(_ opt: String) -> String {
+        switch opt {
+        case "system_default": return "System Sound (Beep)"
+        case "silent_vibrate": return "Vibrate Only (Silent)"
+        default: return opt.replacingOccurrences(of: "adhan_", with: "").capitalized
+        }
+    }
     
     @State private var showingDocumentPicker = false
     @State private var showingTestAlert = false
@@ -130,6 +141,19 @@ struct SettingsView: View {
             }
             
             Section(header: Text("Adhan Sounds")) {
+                Picker("Tahajjud", selection: $adhanTahajjud) {
+                    ForEach(alertOptions, id: \.self) { opt in
+                         Text(formatOption(opt)).tag(opt)
+                    }
+                    if !alertOptions.contains(adhanTahajjud) {
+                        Text("Custom (\(adhanTahajjud))").tag(adhanTahajjud)
+                    }
+                }
+                Button("Select from Files...") {
+                    selectingForPrayer = "Tahajjud"
+                    showingDocumentPicker = true
+                }.font(.caption).foregroundColor(.cyan)
+
                 Picker("Fajr", selection: $adhanFajr) {
                     ForEach(adhanOptions, id: \.self) { opt in
                         Text(opt.replacingOccurrences(of: "adhan_", with: "").capitalized).tag(opt)

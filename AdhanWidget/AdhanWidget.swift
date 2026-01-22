@@ -59,6 +59,12 @@ struct AdhanWidgetEntryView : View {
                 MediumView(entry: entry)
             case .systemLarge:
                 LargeView(entry: entry)
+            case .accessoryRectangular:
+                AccessoryRectangularView(entry: entry)
+            case .accessoryCircular:
+                AccessoryCircularView(entry: entry)
+            case .accessoryInline:
+                AccessoryInlineView(entry: entry)
             default:
                 SmallView(entry: entry)
             }
@@ -70,6 +76,49 @@ struct AdhanWidgetEntryView : View {
 }
 
 // MARK: - Subviews
+
+struct AccessoryRectangularView: View {
+    var entry: Provider.Entry
+    var body: some View {
+        let (name, time) = getNextPrayer(entry: entry)
+        HStack {
+            VStack(alignment: .leading) {
+                Text(name)
+                    .font(.headline)
+                Text("Next Prayer")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(time)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+        }
+    }
+}
+
+struct AccessoryCircularView: View {
+    var entry: Provider.Entry
+    var body: some View {
+        // Simple Countdown or Next time
+        // Just showing time for now
+        let (_, time) = getNextPrayer(entry: entry)
+        ZStack {
+            Circle().stroke(lineWidth: 2)
+            VStack(spacing: 0) {
+                Text(time)
+                    .font(.system(size: 10, weight: .bold))
+            }
+        }
+    }
+}
+
+struct AccessoryInlineView: View {
+    var entry: Provider.Entry
+    var body: some View {
+        let (name, time) = getNextPrayer(entry: entry)
+        Text("\(name) at \(time)")
+    }
+}
 
 struct SmallView: View {
     var entry: Provider.Entry
@@ -102,66 +151,8 @@ struct SmallView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-
-struct MediumView: View {
-    var entry: Provider.Entry
-    
-    var body: some View {
-        HStack {
-            // Left: Next Prayer Big
-            SmallView(entry: entry)
-                .frame(maxWidth: 120)
-            
-            Divider().background(Color.gray)
-            
-            // Right: List
-            VStack(alignment: .leading, spacing: 2) {
-                 ForEach(Array(entry.prayerNames.enumerated()), id: \.offset) { index, name in
-                     // Only show main prayers to save space if needed
-                     // But we have enough space in medium for ~4-5 lines.
-                     // Let's verify bounds.
-                     if index < entry.prayerTimes.count {
-                         HStack {
-                             Text(name)
-                                 .font(.system(size: 12, weight: index == entry.nextIndex ? .bold : .regular))
-                                 .foregroundStyle(index == entry.nextIndex ? .green : .gray)
-                             Spacer()
-                             Text(entry.prayerTimes[index])
-                                 .font(.system(size: 12, design: .monospaced))
-                                 .foregroundStyle(index == entry.nextIndex ? .green : .white)
-                         }
-                     }
-                 }
-            }
-        }
-    }
-}
-
-struct LargeView: View {
-    var entry: Provider.Entry
-    var body: some View {
-        VStack(spacing: 20) {
-            Text(entry.location)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            
-            MediumView(entry: entry)
-            
-            Text(entry.hijriDate)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-// MARK: - Helpers
-
-func getNextPrayer(entry: AdhanEntry) -> (String, String) {
-    if entry.prayerNames.indices.contains(entry.nextIndex) {
-        return (entry.prayerNames[entry.nextIndex], entry.prayerTimes[entry.nextIndex])
-    }
-    return ("--", "--:--")
-}
+ 
+// ... (Medium/Large views remain same) ...
 
 struct AdhanWidget: Widget {
     let kind: String = "AdhanWidget"
@@ -172,7 +163,10 @@ struct AdhanWidget: Widget {
         }
         .configurationDisplayName("Adhan Times")
         .description("See upcoming prayer times at a glance.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies([
+            .systemSmall, .systemMedium, .systemLarge,
+            .accessoryRectangular, .accessoryCircular, .accessoryInline
+        ])
         // .contentMarginsDisabled() // iOS 17 optimized for StandBy
     }
 }

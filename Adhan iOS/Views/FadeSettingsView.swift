@@ -16,6 +16,12 @@ struct FadeSettingsView: View {
     @AppStorage("fade_isha_duration") private var fadeIshaDuration: Double = 0.0
     @AppStorage("fade_isha_volume") private var fadeIshaVolume: Double = 0.0
     
+    @AppStorage("max_volume_fajr") private var maxVolFajr: Double = 1.0
+    @AppStorage("max_volume_dhuhr") private var maxVolDhuhr: Double = 1.0
+    @AppStorage("max_volume_asr") private var maxVolAsr: Double = 1.0
+    @AppStorage("max_volume_maghrib") private var maxVolMaghrib: Double = 1.0
+    @AppStorage("max_volume_isha") private var maxVolIsha: Double = 1.0
+    
     let prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
     
     var body: some View {
@@ -78,12 +84,31 @@ struct FadeDetailView: View {
     @AppStorage("fade_isha_duration") private var fadeIshaDuration: Double = 0.0
     @AppStorage("fade_isha_volume") private var fadeIshaVolume: Double = 0.0
     
+    @AppStorage("max_volume_fajr") private var maxVolFajr: Double = 1.0
+    @AppStorage("max_volume_dhuhr") private var maxVolDhuhr: Double = 1.0
+    @AppStorage("max_volume_asr") private var maxVolAsr: Double = 1.0
+    @AppStorage("max_volume_maghrib") private var maxVolMaghrib: Double = 1.0
+    @AppStorage("max_volume_isha") private var maxVolIsha: Double = 1.0
+    
+    @AppStorage("fade_tahajjud_duration") private var fadeTahajjudDuration: Double = 5.0
+    @AppStorage("fade_tahajjud_volume") private var fadeTahajjudVolume: Double = 0.0
+    @AppStorage("max_volume_tahajjud") private var maxVolTahajjud: Double = 1.0
+    
     var body: some View {
         Form {
-            Section(header: Text("Settings for \(prayer)")) {
+            Section(header: Text("Volume Settings for \(prayer)")) {
                 VStack(alignment: .leading) {
-                    Text("Initial Volume: \(Int(volume * 100))%")
-                    Slider(value: volumeBinding, in: 0.0...1.0, step: 0.1)
+                    Text("Max Volume (System): \(Int(maxVolume * 100))%")
+                    Slider(value: maxVolumeBinding, in: 0.0...1.0, step: 0.05)
+                }
+                Text("This overrides the phone's volume when \(prayer) Adhan starts.")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            
+            Section(header: Text("Fading Settings")) {
+                VStack(alignment: .leading) {
+                    Text("Start Volume (Fade-In): \(Int(volume * 100))%")
+                    Slider(value: volumeBinding, in: 0.0...1.0, step: 0.05)
                 }
                 
                 VStack(alignment: .leading) {
@@ -95,7 +120,6 @@ struct FadeDetailView: View {
             Section {
                 Button("Test Fading (\(prayer))") {
                     // Play test using these settings
-                    // We must pass the PRAYER NAME to force the manager to look up these keys
                     AudioManager.shared.playAdhan(fileName: "adhan_regular", prayerName: prayer)
                 }
                 .foregroundColor(.blue)
@@ -110,6 +134,18 @@ struct FadeDetailView: View {
     }
     
     // Dynamic bindings based on prayer string
+    var maxVolumeBinding: Binding<Double> {
+        switch prayer {
+        case "Fajr": return $maxVolFajr
+        case "Dhuhr": return $maxVolDhuhr
+        case "Asr": return $maxVolAsr
+        case "Maghrib": return $maxVolMaghrib
+        case "Isha": return $maxVolIsha
+        case "Tahajjud": return $maxVolTahajjud
+        default: return $maxVolFajr
+        }
+    }
+    
     var durationBinding: Binding<Double> {
         switch prayer {
         case "Fajr": return $fadeFajrDuration
@@ -117,6 +153,7 @@ struct FadeDetailView: View {
         case "Asr": return $fadeAsrDuration
         case "Maghrib": return $fadeMaghribDuration
         case "Isha": return $fadeIshaDuration
+        case "Tahajjud": return $fadeTahajjudDuration
         default: return $fadeFajrDuration
         }
     }
@@ -128,10 +165,12 @@ struct FadeDetailView: View {
         case "Asr": return $fadeAsrVolume
         case "Maghrib": return $fadeMaghribVolume
         case "Isha": return $fadeIshaVolume
+        case "Tahajjud": return $fadeTahajjudVolume
         default: return $fadeFajrVolume
         }
     }
     
     var duration: Double { durationBinding.wrappedValue }
     var volume: Double { volumeBinding.wrappedValue }
+    var maxVolume: Double { maxVolumeBinding.wrappedValue }
 }

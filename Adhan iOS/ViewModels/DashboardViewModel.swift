@@ -635,6 +635,7 @@ class DashboardViewModel: ObservableObject {
         case "asr": return adhanAsrPref
         case "maghrib": return adhanMaghribPref
         case "isha": return adhanIshaPref
+        case "tahajjud": return adhanTahajjudPref
         default: return "adhan_regular"
         }
     }
