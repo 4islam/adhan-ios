@@ -218,6 +218,23 @@ struct SettingsView: View {
                     Text("View Error Logs")
                 }
             }
+            
+            Section(header: Text("Siri & Shortcuts")) {
+                Button(action: {
+                    let url = URL(string: "shortcuts://create-shortcut?name=Play%20Adhan&action=PlayAdhanIntent")!
+                    // Note: Direct deep linking to create a shortcut is restricted, 
+                    // usually we just guide them to the Shortcuts app or use `SiriTipView` (UIKit).
+                    // For now, valid URL to open Shortcuts App:
+                    if let shortcutsURL = URL(string: "shortcuts://") {
+                        UIApplication.shared.open(shortcutsURL)
+                    }
+                }) {
+                    Label("Open Shortcuts App", systemImage: "arrow.up.forward.app")
+                }
+                Text("In Shortcuts, search for 'Adhan iOS' to create automations like 'Play Adhan when charging'.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .alert("Adhan Scheduled", isPresented: $showingTestAlert) {
             Button("OK", role:.cancel) { }

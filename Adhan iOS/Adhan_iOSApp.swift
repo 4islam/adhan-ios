@@ -55,6 +55,14 @@ struct Adhan_iOSApp: App {
                         LogManager.shared.log("Adhan_iOSApp: Unknown scene phase: \(newPhase)")
                     }
                 }
+                .onOpenURL { url in
+                    LogManager.shared.log("Adhan_iOSApp: Open URL: \(url)")
+                    if url.scheme == "adhan" && url.host == "play" {
+                        AudioManager.shared.playAdhan(fileName: "adhan_regular")
+                    } else if url.absoluteString.contains("stop") {
+                         AudioManager.shared.stop()
+                    }
+                }
         }
     }
 }
