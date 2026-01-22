@@ -15,6 +15,8 @@ struct SettingsView: View {
     @AppStorage("tahajjudEnabled") private var tahajjudEnabled: Bool = true
     @AppStorage("tahajjudOffset") private var tahajjudOffset: Double = 60
     @AppStorage("combineThreshold") private var combineThreshold: Double = 30
+    @AppStorage("combineShortNightEnabled") private var combineShortNightEnabled: Bool = false
+    @AppStorage("shortNightDuration") private var shortNightDuration: Double = 5.0
     @AppStorage("preferInternalSpeaker") private var preferInternalSpeaker: Bool = false
     
     @ObservedObject var audioManager = AudioManager.shared

@@ -77,6 +77,8 @@ class DashboardViewModel: ObservableObject {
     @AppStorage("adhan_fajr") private var adhanFajrPref: String = "adhan_fajr"
     @AppStorage("adhan_dhuhr") private var adhanDhuhrPref: String = "adhan_regular"
     @AppStorage("adhan_asr") private var adhanAsrPref: String = "adhan_regular"
+    @AppStorage("combineShortNightEnabled") private var combineShortNightEnabled: Bool = false
+    @AppStorage("shortNightDuration") private var shortNightDuration: Double = 5.0
     @AppStorage("adhan_maghrib") private var adhanMaghribPref: String = "adhan_regular"
     @AppStorage("adhan_isha") private var adhanIshaPref: String = "adhan_regular"
     
@@ -306,8 +308,19 @@ class DashboardViewModel: ObservableObject {
         adjustedFloatTimes[5] = maghribFloat
         adjustedFloatTimes[6] = ishaFloat
         
+        var isShortNight = false
+        if combineShortNightEnabled {
+             // Calculate night duration: (24 - Isha) + Fajr
+             // Note: Using today's Fajr as approx for tomorrow's Fajr. 
+             // Ideally we'd calc tomorrow's Fajr but this is sufficient for a general rule.
+             let nightDuration = (24.0 - ishaFloat) + fajrFloat 
+             if nightDuration < shortNightDuration {
+                 isShortNight = true
+             }
+        }
+        
         self.isCombinedDhuhrAsr = (asrFloat - dhuhrFloat) * 60.0 <= combineThreshold
-        self.isCombinedMaghribIsha = (ishaFloat - maghribFloat) * 60.0 <= combineThreshold
+        self.isCombinedMaghribIsha = isShortNight || ((ishaFloat - maghribFloat) * 60.0 <= combineThreshold)
         
         // 6. Format Strings for individual display
         pt.setTimeFormat(originalFormat)
