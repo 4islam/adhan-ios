@@ -124,6 +124,7 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         content.categoryIdentifier = "PRAYER_ALERT"
         content.userInfo = [
             "PRAYER_TITLE": title,
+            "PRAYER_NAME": title, // Used for lookup of settings (fade/volume)
             "ADHAN_FILE": soundName ?? "adhan_regular"
         ]
         
@@ -175,8 +176,9 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         
         // Try to get specific file from payload, otherwise default
         if let adhanFile = userInfo["ADHAN_FILE"] as? String {
-             LogManager.shared.log("Notifications: Manual Foreground Playback -> \(adhanFile)")
-             AudioManager.shared.playAdhan(fileName: adhanFile)
+             let prayerName = userInfo["PRAYER_NAME"] as? String
+             LogManager.shared.log("Notifications: Manual Foreground Playback -> \(adhanFile) for \(prayerName ?? "Unknown")")
+             AudioManager.shared.playAdhan(fileName: adhanFile, prayerName: prayerName)
         } else {
              // Fallback if no specific file linked
              LogManager.shared.log("Notifications: Manual Foreground Playback -> adhan_regular")
@@ -193,10 +195,11 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         if response.actionIdentifier == "PLAY_ADHAN" {
             let userInfo = response.notification.request.content.userInfo
             let adhanFile = userInfo["ADHAN_FILE"] as? String
+            let prayerName = userInfo["PRAYER_NAME"] as? String
             LogManager.shared.log("Notifications: Payload: \(userInfo)")
             
             // Tell AudioManager to play the specific audio selected
-            AudioManager.shared.playAdhan(fileName: adhanFile)
+            AudioManager.shared.playAdhan(fileName: adhanFile, prayerName: prayerName)
         }
         completionHandler()
     }

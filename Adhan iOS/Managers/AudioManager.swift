@@ -37,6 +37,8 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         LogManager.shared.log("AudioManager: Current Route: \(currentRoute)")
     }
     
+    private var fadeTimer: Timer?
+    
     func playAdhan(fileName: String? = nil, prayerName: String? = nil) {
         LogManager.shared.log("AudioManager: playAdhan called. File: \(String(describing: fileName)), Prayer: \(String(describing: prayerName))")
         
@@ -121,10 +123,38 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
             player?.delegate = self
             
             if player?.prepareToPlay() == true {
+                 // Determine initial settings based on prayer
+                 var initialVol: Float = 0.0
+                 var fadeDuration: Double = 5.0
+                 
+                 if let prayer = prayerName {
+                     // Keys match FadeSettingsView: "fade_{prayer}_volume", "fade_{prayer}_duration"
+                     // Default to 0.0 volume and 5.0 duration if not set
+                     let volKey = "fade_\(prayer.lowercased())_volume"
+                     let durKey = "fade_\(prayer.lowercased())_duration"
+                     
+                     if UserDefaults.standard.object(forKey: volKey) != nil {
+                         initialVol = Float(UserDefaults.standard.double(forKey: volKey))
+                     }
+                     if UserDefaults.standard.object(forKey: durKey) != nil {
+                         fadeDuration = UserDefaults.standard.double(forKey: durKey)
+                     }
+                 }
+                 
+                 // Apply valid volume
+                 player?.volume = initialVol
                  player?.play()
+                 
+                 // specific handling for "no fade" (duration 0)
+                 if fadeDuration > 0 {
+                     startFadeIn(duration: fadeDuration, startVolume: initialVol)
+                 } else {
+                     player?.volume = 1.0 // Instant full volume
+                 }
+                 
                  isPlaying = true
                  updateCurrentRoute()
-                 LogManager.shared.log("AudioManager: Playing \(chosenFile) (Duration: \(player?.duration ?? 0))")
+                 LogManager.shared.log("AudioManager: Playing \(chosenFile) (Vol: \(initialVol) -> 1.0 over \(fadeDuration)s)")
             } else {
                  let msg = "AudioManager: prepareToPlay() failed."
                  print(msg)
@@ -137,8 +167,42 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
     }
     
+    private func startFadeIn(duration: TimeInterval, startVolume: Float) {
+        // Cancel any existing timer
+        fadeTimer?.invalidate()
+        
+        guard duration > 0 else {
+            player?.volume = 1.0
+            return
+        }
+        
+        let steps: Double = duration * 10 // Update every 0.1s
+        let stepInterval = 0.1
+        let volumeRange = 1.0 - startVolume
+        let volumeIncrement = volumeRange / Float(steps)
+        
+        LogManager.shared.log("AudioManager: Starting fade-in from \(startVolume) over \(duration)s")
+        
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: stepInterval, repeats: true) { [weak self] timer in
+            guard let self = self, let player = self.player else {
+                timer.invalidate()
+                return
+            }
+            
+            if player.volume < 1.0 {
+                // Ensure we don't float-overflow past 1.0
+                player.volume = min(1.0, player.volume + volumeIncrement)
+            } else {
+                // Done
+                timer.invalidate()
+                LogManager.shared.log("AudioManager: Fade-in complete.")
+            }
+        }
+    }
+    
     func stop() {
         LogManager.shared.log("AudioManager: Stop requested.")
+        fadeTimer?.invalidate() // Stop fading if interrupted
         player?.stop()
         isPlaying = false
         deactivateSession()
@@ -157,6 +221,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         LogManager.shared.log("AudioManager: Finished playing. Success: \(flag)")
+        fadeTimer?.invalidate()
         isPlaying = false
         deactivateSession()
     }

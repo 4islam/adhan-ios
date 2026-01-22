@@ -153,6 +153,10 @@ struct SettingsView: View {
                     selectingForPrayer = "Isha"
                     showingDocumentPicker = true
                 }.font(.caption).foregroundColor(.cyan)
+                
+                NavigationLink(destination: FadeSettingsView()) {
+                     Text("Configure Fading & Volume")
+                }
             }
             
             Section(header: Text("High Latitude Rule")) {

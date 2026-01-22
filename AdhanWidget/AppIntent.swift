@@ -29,21 +29,4 @@ struct ConfigurationAppIntent: WidgetConfigurationIntent {
     var prayerFocus: String?
 }
 
-// 3. Helper for URL opening (Internal)
-struct OpenURLIntent: AppIntent {
-    static var title: LocalizedStringResource = "Open URL"
-    @Parameter(title: "URL")
-    var url: URL
-    
-    init(url: URL) {
-        self.url = url
-    }
-    
-    init() {}
-    
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        await UIApplication.shared.open(url)
-        return .result()
-    }
-}
+
