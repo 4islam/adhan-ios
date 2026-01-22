@@ -82,6 +82,7 @@ class DashboardViewModel: ObservableObject {
     @AppStorage("shortNightDuration") private var shortNightDuration: Double = 9.0
     @AppStorage("adhan_maghrib") private var adhanMaghribPref: String = "adhan_regular"
     @AppStorage("adhan_isha") private var adhanIshaPref: String = "adhan_regular"
+    @AppStorage("adhan_tahajjud") private var adhanTahajjudPref: String = "adhan_fajr"
     
     init() {
         startTimer()
@@ -666,10 +667,12 @@ class DashboardViewModel: ObservableObject {
                 case "asr": self.adhanAsrPref = fileName
                 case "maghrib": self.adhanMaghribPref = fileName
                 case "isha": self.adhanIshaPref = fileName
+                case "tahajjud": self.adhanTahajjudPref = fileName
                 default: break
                 }
                 self.scheduleNotifications()
             }
+
         } catch {
             print("Failed to import custom adhan: \(error)")
         }

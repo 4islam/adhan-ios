@@ -152,7 +152,65 @@ struct SmallView: View {
     }
 }
  
-// ... (Medium/Large views remain same) ...
+struct MediumView: View {
+    var entry: Provider.Entry
+    
+    var body: some View {
+        HStack {
+            // Left: Next Prayer Big
+            SmallView(entry: entry)
+                .frame(maxWidth: 120)
+            
+            Divider().background(Color.gray)
+            
+            // Right: List
+            VStack(alignment: .leading, spacing: 2) {
+                 ForEach(Array(entry.prayerNames.enumerated()), id: \.offset) { index, name in
+                     // Only show main prayers to save space if needed
+                     // But we have enough space in medium for ~4-5 lines.
+                     // Let's verify bounds.
+                     if index < entry.prayerTimes.count {
+                         HStack {
+                             Text(name)
+                                 .font(.system(size: 12, weight: index == entry.nextIndex ? .bold : .regular))
+                                 .foregroundStyle(index == entry.nextIndex ? .green : .gray)
+                             Spacer()
+                             Text(entry.prayerTimes[index])
+                                 .font(.system(size: 12, design: .monospaced))
+                                 .foregroundStyle(index == entry.nextIndex ? .green : .white)
+                         }
+                     }
+                 }
+            }
+        }
+    }
+}
+
+struct LargeView: View {
+    var entry: Provider.Entry
+    var body: some View {
+        VStack(spacing: 20) {
+            Text(entry.location)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            MediumView(entry: entry)
+            
+            Text(entry.hijriDate)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Helpers
+
+func getNextPrayer(entry: AdhanEntry) -> (String, String) {
+    if entry.prayerNames.indices.contains(entry.nextIndex) {
+        return (entry.prayerNames[entry.nextIndex], entry.prayerTimes[entry.nextIndex])
+    }
+    return ("--", "--:--")
+}
 
 struct AdhanWidget: Widget {
     let kind: String = "AdhanWidget"

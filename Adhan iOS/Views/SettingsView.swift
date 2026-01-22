@@ -28,7 +28,6 @@ struct SettingsView: View {
     @AppStorage("adhan_dhuhr") private var adhanDhuhr: String = "adhan_regular"
     @AppStorage("adhan_asr") private var adhanAsr: String = "adhan_regular"
     @AppStorage("adhan_maghrib") private var adhanMaghrib: String = "adhan_regular"
-    @AppStorage("adhan_maghrib") private var adhanMaghrib: String = "adhan_regular"
     @AppStorage("adhan_isha") private var adhanIsha: String = "adhan_regular"
     @AppStorage("adhan_tahajjud") private var adhanTahajjud: String = "adhan_fajr"
     
