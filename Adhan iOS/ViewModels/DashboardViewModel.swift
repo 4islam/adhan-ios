@@ -422,6 +422,15 @@ class DashboardViewModel: ObservableObject {
         
         // Update Location Name (Geocoding)
         reverseGeocode(loc)
+        
+        // Sync to App Group for Widget / StandBy
+        SharedDataManager.shared.savePrayerData(
+            times: self.prayerTimes,
+            names: self.prayerNames,
+            nextIndex: self.nextPrayerIndex,
+            location: self.locationName,
+            hijri: self.hijriDateString
+        )
     }
     
     private func reverseGeocode(_ location: CLLocation) {

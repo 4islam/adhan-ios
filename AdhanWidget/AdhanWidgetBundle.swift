@@ -12,7 +12,7 @@ import SwiftUI
 struct AdhanWidgetBundle: WidgetBundle {
     var body: some Widget {
         AdhanWidget()
-        AdhanWidgetControl()
-        AdhanWidgetLiveActivity()
+        // AdhanWidgetControl()
+        // AdhanWidgetLiveActivity()
     }
 }

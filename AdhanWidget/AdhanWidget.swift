@@ -1,88 +1,178 @@
-//
-//  AdhanWidget.swift
-//  AdhanWidget
-//
-//  Created by Naveed ul Islam on 2026-01-21.
-//
-
 import WidgetKit
 import SwiftUI
 
-struct Provider: AppIntentTimelineProvider {
-    func placeholder(in context: Context) -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: ConfigurationAppIntent())
-    }
-
-    func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: configuration)
-    }
-    
-    func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<SimpleEntry> {
-        var entries: [SimpleEntry] = []
-
-        // Generate a timeline consisting of five entries an hour apart, starting from the current date.
-        let currentDate = Date()
-        for hourOffset in 0 ..< 5 {
-            let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-            let entry = SimpleEntry(date: entryDate, configuration: configuration)
-            entries.append(entry)
-        }
-
-        return Timeline(entries: entries, policy: .atEnd)
-    }
-
-//    func relevances() async -> WidgetRelevances<ConfigurationAppIntent> {
-//        // Generate a list containing the contexts this widget is relevant in.
-//    }
+struct AdhanEntry: TimelineEntry {
+    let date: Date
+    let prayerNames: [String]
+    let prayerTimes: [String]
+    let nextIndex: Int
+    let location: String
+    let hijriDate: String
 }
 
-struct SimpleEntry: TimelineEntry {
-    let date: Date
-    let configuration: ConfigurationAppIntent
+struct Provider: TimelineProvider {
+    func placeholder(in context: Context) -> AdhanEntry {
+        AdhanEntry(date: Date(), prayerNames: ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"], prayerTimes: ["05:00", "13:00", "16:30", "19:00", "21:00"], nextIndex: 0, location: "Loading...", hijriDate: "1445 AH")
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (AdhanEntry) -> ()) {
+        completion(loadData())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<AdhanEntry>) -> ()) {
+        // Reload every 15 minutes to keep "Next" highlight accurate enough, 
+        // or whenever the main app updates the shared defaults.
+        let entry = loadData()
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date())!
+        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
+        completion(timeline)
+    }
+    
+    private func loadData() -> AdhanEntry {
+        if let data = SharedDataManager.shared.getPrayerData() {
+            return AdhanEntry(
+                date: Date(),
+                prayerNames: data.names,
+                prayerTimes: data.times,
+                nextIndex: data.nextIndex,
+                location: data.location,
+                hijriDate: data.hijri
+            )
+        }
+        return AdhanEntry(date: Date(), prayerNames: ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"], prayerTimes: ["05:00", "13:00", "16:30", "19:00", "21:00"], nextIndex: 0, location: "Loading...", hijriDate: "1445 AH")
+    }
 }
 
 struct AdhanWidgetEntryView : View {
     var entry: Provider.Entry
+    @Environment(\.widgetFamily) var family
 
     var body: some View {
-        VStack {
-            Text("Time:")
-            Text(entry.date, style: .time)
-
-            Text("Favorite Emoji:")
-            Text(entry.configuration.favoriteEmoji)
+        ZStack {
+            // Background: Solid black for OLED StandBy power saving
+            Color.black.edgesIgnoringSafeArea(.all)
+            
+            switch family {
+            case .systemSmall:
+                SmallView(entry: entry)
+            case .systemMedium:
+                MediumView(entry: entry)
+            case .systemLarge:
+                LargeView(entry: entry)
+            default:
+                SmallView(entry: entry)
+            }
+        }
+        .containerBackground(for: .widget) {
+            Color.black
         }
     }
+}
+
+// MARK: - Subviews
+
+struct SmallView: View {
+    var entry: Provider.Entry
+    
+    var body: some View {
+        let (name, time) = getNextPrayer(entry: entry)
+        
+        VStack(alignment: .leading, spacing: 4) {
+            // Header
+            Text("NEXT PRAYER")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            
+            // Name
+            Text(name)
+                .font(.system(size: 24, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .minimumScaleFactor(0.6)
+            
+            Spacer()
+            
+            // Time
+            Text(time)
+                .font(.system(size: 32, weight: .black, design: .monospaced))
+                .foregroundStyle(.green) // Classic "Night Stand" Green
+                .minimumScaleFactor(0.8)
+                
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct MediumView: View {
+    var entry: Provider.Entry
+    
+    var body: some View {
+        HStack {
+            // Left: Next Prayer Big
+            SmallView(entry: entry)
+                .frame(maxWidth: 120)
+            
+            Divider().background(Color.gray)
+            
+            // Right: List
+            VStack(alignment: .leading, spacing: 2) {
+                 ForEach(Array(entry.prayerNames.enumerated()), id: \.offset) { index, name in
+                     // Only show main prayers to save space if needed
+                     // But we have enough space in medium for ~4-5 lines.
+                     // Let's verify bounds.
+                     if index < entry.prayerTimes.count {
+                         HStack {
+                             Text(name)
+                                 .font(.system(size: 12, weight: index == entry.nextIndex ? .bold : .regular))
+                                 .foregroundStyle(index == entry.nextIndex ? .green : .gray)
+                             Spacer()
+                             Text(entry.prayerTimes[index])
+                                 .font(.system(size: 12, design: .monospaced))
+                                 .foregroundStyle(index == entry.nextIndex ? .green : .white)
+                         }
+                     }
+                 }
+            }
+        }
+    }
+}
+
+struct LargeView: View {
+    var entry: Provider.Entry
+    var body: some View {
+        VStack(spacing: 20) {
+            Text(entry.location)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            MediumView(entry: entry)
+            
+            Text(entry.hijriDate)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Helpers
+
+func getNextPrayer(entry: AdhanEntry) -> (String, String) {
+    if entry.prayerNames.indices.contains(entry.nextIndex) {
+        return (entry.prayerNames[entry.nextIndex], entry.prayerTimes[entry.nextIndex])
+    }
+    return ("--", "--:--")
 }
 
 struct AdhanWidget: Widget {
     let kind: String = "AdhanWidget"
 
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
+        StaticConfiguration(kind: kind, provider: Provider()) { entry in
             AdhanWidgetEntryView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
         }
+        .configurationDisplayName("Adhan Times")
+        .description("See upcoming prayer times at a glance.")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        // .contentMarginsDisabled() // iOS 17 optimized for StandBy
     }
-}
-
-extension ConfigurationAppIntent {
-    fileprivate static var smiley: ConfigurationAppIntent {
-        let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "😀"
-        return intent
-    }
-    
-    fileprivate static var starEyes: ConfigurationAppIntent {
-        let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "🤩"
-        return intent
-    }
-}
-
-#Preview(as: .systemSmall) {
-    AdhanWidget()
-} timeline: {
-    SimpleEntry(date: .now, configuration: .smiley)
-    SimpleEntry(date: .now, configuration: .starEyes)
 }
