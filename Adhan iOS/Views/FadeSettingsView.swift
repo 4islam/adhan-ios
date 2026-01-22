@@ -16,13 +16,16 @@ struct FadeSettingsView: View {
     @AppStorage("fade_isha_duration") private var fadeIshaDuration: Double = 0.0
     @AppStorage("fade_isha_volume") private var fadeIshaVolume: Double = 0.0
     
+    @AppStorage("fade_tahajjud_duration") private var fadeTahajjudDuration: Double = 5.0
+    @AppStorage("fade_tahajjud_volume") private var fadeTahajjudVolume: Double = 0.0
+    
     @AppStorage("max_volume_fajr") private var maxVolFajr: Double = 1.0
     @AppStorage("max_volume_dhuhr") private var maxVolDhuhr: Double = 1.0
     @AppStorage("max_volume_asr") private var maxVolAsr: Double = 1.0
     @AppStorage("max_volume_maghrib") private var maxVolMaghrib: Double = 1.0
     @AppStorage("max_volume_isha") private var maxVolIsha: Double = 1.0
     
-    let prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+    let prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha", "Tahajjud"]
     
     var body: some View {
         List {
@@ -58,6 +61,7 @@ struct FadeSettingsView: View {
         case "Asr": duration = fadeAsrDuration; vol = fadeAsrVolume
         case "Maghrib": duration = fadeMaghribDuration; vol = fadeMaghribVolume
         case "Isha": duration = fadeIshaDuration; vol = fadeIshaVolume
+        case "Tahajjud": duration = fadeTahajjudDuration; vol = fadeTahajjudVolume
         default: return ""
         }
         

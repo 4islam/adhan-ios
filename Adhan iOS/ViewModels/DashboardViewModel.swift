@@ -82,7 +82,7 @@ class DashboardViewModel: ObservableObject {
     @AppStorage("shortNightDuration") private var shortNightDuration: Double = 9.0
     @AppStorage("adhan_maghrib") private var adhanMaghribPref: String = "adhan_regular"
     @AppStorage("adhan_isha") private var adhanIshaPref: String = "adhan_regular"
-    @AppStorage("adhan_tahajjud") private var adhanTahajjudPref: String = "adhan_fajr"
+    @AppStorage("adhan_tahajjud") private var adhanTahajjudPref: String = "silent_vibrate"
     
     init() {
         startTimer()
