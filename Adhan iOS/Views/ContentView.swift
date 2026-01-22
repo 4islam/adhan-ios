@@ -52,6 +52,7 @@ struct ContentView: View {
             }
             .navigationBarHidden(true)
         }
+        .environmentObject(viewModel)
         .onAppear {
             viewModel.calculatePrayerTimes(location: locationManager)
         }

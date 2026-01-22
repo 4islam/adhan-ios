@@ -15,6 +15,7 @@ struct SettingsView: View {
     @AppStorage("tahajjudEnabled") private var tahajjudEnabled: Bool = true
     @AppStorage("tahajjudOffset") private var tahajjudOffset: Double = 60
     @AppStorage("combineThreshold") private var combineThreshold: Double = 70
+    @AppStorage("asrMaghribGapThreshold") private var asrMaghribGapThreshold: Double = 90
     @AppStorage("combineShortNightEnabled") private var combineShortNightEnabled: Bool = true
     @AppStorage("shortNightDuration") private var shortNightDuration: Double = 9.0
     @AppStorage("preferInternalSpeaker") private var preferInternalSpeaker: Bool = false
@@ -62,8 +63,13 @@ struct SettingsView: View {
             }
             
             Section(header: Text("Prayer Combining")) {
-                Stepper("Threshold: \(Int(combineThreshold))m gap", value: $combineThreshold, in: 0...120, step: 5)
-                Text("Dhuhr/Asr or Maghrib/Isha will be marked as Combined if the gap is less than this threshold.")
+                Stepper("Standard Gap Threshold: \(Int(combineThreshold))m", value: $combineThreshold, in: 0...120, step: 5)
+                Text("Dhuhr/Asr or Maghrib/Isha combine if their own gap is small.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Stepper("Asr-Maghrib Gap: \(Int(asrMaghribGapThreshold))m", value: $asrMaghribGapThreshold, in: 0...120, step: 5)
+                Text("Combine Dhuhr/Asr if Asr is too close to Maghrib.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 

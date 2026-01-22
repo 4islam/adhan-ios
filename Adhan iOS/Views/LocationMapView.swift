@@ -37,23 +37,33 @@ struct LocationMapView: View {
     
     var body: some View {
         ZStack {
-            Map(position: $position, interactionModes: [.all]) {
-                if let userLoc = locationManager.location?.coordinate {
-                    Marker("Current Context", coordinate: userLoc)
-                        .tint(locationManager.isUsingManualLocation ? .orange : .blue)
-                    
-                    Marker("Kaaba", coordinate: kaabaCoordinate)
-                    
-                    MapPolyline(coordinates: [userLoc, kaabaCoordinate], contourStyle: .geodesic)
-                        .stroke(locationManager.isUsingManualLocation ? .orange : .blue, lineWidth: 3)
+            GeometryReader { geometry in
+                let size = geometry.size
+                let diagonal = sqrt(size.width * size.width + size.height * size.height)
+                
+                Map(position: $position, interactionModes: [.all]) {
+                    if let userLoc = locationManager.location?.coordinate {
+                        Marker("Current Context", coordinate: userLoc)
+                            .tint(locationManager.isUsingManualLocation ? .orange : .blue)
+                        
+                        Marker("Kaaba", coordinate: kaabaCoordinate)
+                        
+                        MapPolyline(coordinates: [userLoc, kaabaCoordinate], contourStyle: .geodesic)
+                            .stroke(locationManager.isUsingManualLocation ? .orange : .blue, lineWidth: 3)
+                    }
                 }
+                .mapStyle(mapStyle.style)
+                .frame(width: diagonal, height: diagonal) // Oversize to cover corners when rotated
+                .position(x: size.width / 2, y: size.height / 2)
+                .onMapCameraChange(frequency: .continuous) { context in
+                    self.cameraCenter = context.region.center
+                    self.isManuallyMoving = true
+                }
+                .rotationEffect(.degrees(-mapRotation))
             }
-            .mapStyle(mapStyle.style)
-            .onMapCameraChange(frequency: .continuous) { context in
-                self.cameraCenter = context.region.center
-                self.isManuallyMoving = true
-            }
-            .rotationEffect(.degrees(-mapRotation))
+            .ignoresSafeArea()
+            
+            .ignoresSafeArea()
             .onReceive(locationManager.$heading) { heading in
                 if !locationManager.isUsingManualLocation, let trueHeading = heading?.trueHeading {
                     withAnimation(.linear(duration: 0.1)) {
@@ -192,6 +202,12 @@ struct LocationMapView: View {
                 .background(.ultraThinMaterial)
                 .cornerRadius(10)
                 .padding()
+            }
+        }
+        .onAppear {
+            if let userLoc = locationManager.location?.coordinate {
+                // Default to a closer zoom (1000m altitude/distance) on load
+                position = .camera(MapCamera(centerCoordinate: userLoc, distance: 1000))
             }
         }
     }

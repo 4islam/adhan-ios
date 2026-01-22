@@ -66,6 +66,7 @@ class DashboardViewModel: ObservableObject {
     // Phase 2 Settings
     @AppStorage("tahajjudOffset") private var tahajjudOffset: Double = 60 // minutes before Fajr
     @AppStorage("combineThreshold") private var combineThreshold: Double = 70 // minutes gap
+    @AppStorage("asrMaghribGapThreshold") private var asrMaghribGapThreshold: Double = 90
     @AppStorage("tahajjudEnabled") private var tahajjudEnabled: Bool = true
     
     // Offsets
@@ -320,7 +321,7 @@ class DashboardViewModel: ObservableObject {
         }
         
         let asrMaghribGap = (maghribFloat - asrFloat) * 60.0
-        self.isCombinedDhuhrAsr = ((asrFloat - dhuhrFloat) * 60.0 <= combineThreshold) || (asrMaghribGap <= combineThreshold)
+        self.isCombinedDhuhrAsr = ((asrFloat - dhuhrFloat) * 60.0 <= combineThreshold) || (asrMaghribGap <= asrMaghribGapThreshold)
         self.isCombinedMaghribIsha = isShortNight || ((ishaFloat - maghribFloat) * 60.0 <= combineThreshold)
         
         // 6. Format Strings for individual display
