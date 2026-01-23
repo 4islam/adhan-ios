@@ -47,41 +47,42 @@ class ManualTests {
         // 1. Mock Data Setup
         let viewModel = DashboardViewModel()
         
-        // Mock Maghrib at 18:00 (6:00 PM) = 18.0
+        // Mock Asr at 15:00 (3:00 PM) = 15.0
         // We inject this by manipulating the lastCalculatedFloats
-        // Indices: 0,1,2,3,4,5,6 (Maghrib)
-        var mockFloats = Array(repeating: 0.0, count: 7)
-        mockFloats[6] = 18.0 // Maghrib
+        // Indices: 0-Fajr, 1-Sunr, 2-Noon, 3-Dhuhr, 4-Asr, 5-Sset, 6-Maghrib
+        var mockFloats = Array(repeating: 0.0, count: 9)
+        mockFloats[4] = 15.0 // Asr
         viewModel.setLastCalculatedFloats(mockFloats)
         
-        // 2. Test Friday before limit (e.g. 17:00, 1 hour before Maghrib) -> Should be Friday Verse
-        // Create known date: Friday, Jan 2, 2026 at 17:00
+        // 2. Test Friday before limit (e.g. 14:00, 1 hour before Asr) -> Should be Friday Verse
+        // Create known date: Friday, Jan 2, 2026 at 14:00
         var components = DateComponents()
         components.year = 2026
         components.month = 1
         components.day = 2 // This is a Friday
-        components.hour = 17
+        components.hour = 14
         components.minute = 0
         let fridayEarly = Calendar.current.date(from: components)!
         
         viewModel.updateVerse(date: fridayEarly)
         
         if viewModel.currentVerseEnglish.contains("all_business") {
-            log("✅ PASSED: Friday Verse shown early.")
+            log("✅ PASSED: Friday Verse shown early (before Asr).")
         } else {
-            log("❌ FAILED: Friday Verse NOT shown at 17:00 (Maghrib 18:00).")
+            log("❌ FAILED: Friday Verse NOT shown at 14:00 (Asr 15:00).")
         }
         
-        // 3. Test Friday after limit (e.g. 17:40, 20 mins before Maghrib) -> Should be Standard Verse
-        components.minute = 40
+        // 3. Test Friday after limit (e.g. 15:10, after Asr) -> Should be Standard Verse
+        components.hour = 15
+        components.minute = 10
         let fridayLate = Calendar.current.date(from: components)!
         
         viewModel.updateVerse(date: fridayLate)
         
         if !viewModel.currentVerseEnglish.contains("all_business") {
-             log("✅ PASSED: Standard Verse shown late (20 mins to Maghrib).")
+             log("✅ PASSED: Standard Verse shown late (after Asr).")
         } else {
-             log("❌ FAILED: Friday Verse shown too late (17:40, Maghrib 18:00).")
+             log("❌ FAILED: Friday Verse shown too late (15:10, Asr 15:00).")
         }
         
         // 4. Test Non-Friday (e.g. Saturday Jan 3)

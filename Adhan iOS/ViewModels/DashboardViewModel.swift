@@ -182,16 +182,16 @@ class DashboardViewModel: ObservableObject {
         var showFridayVerse = false
         
         if weekday == 6 {
-            // Check time constraint: Until 30 mins to Maghrib
-            // Maghrib is index 6 in lastCalculatedFloats [Fajr, Sunrise, SolarNoon, Dhuhr, Asr, Sunset, Maghrib, Isha, (Tahajjud)]
-            if lastCalculatedFloats.count > 6 {
-                let maghribFloat = lastCalculatedFloats[6]
+            // lastCalculatedFloats: [Fajr, Sunrise, SolarNoon, Dhuhr, Asr, Sunset, Maghrib, Isha, (Tahajjud)]
+            // User Request: Display verse until Asr time
+            if lastCalculatedFloats.count > 4 {
+                let asrFloat = lastCalculatedFloats[4]
                 
                 let components = calendar.dateComponents([.hour, .minute, .second], from: now)
                 let currentHour = Double(components.hour!) + Double(components.minute!) / 60.0 + Double(components.second!) / 3600.0
                 
-                // If current time is BEFORE (Maghrib - 30 mins)
-                if currentHour < (maghribFloat - 30.0/60.0) {
+                // If current time is BEFORE Asr
+                if currentHour < asrFloat {
                     showFridayVerse = true
                 }
             } else {
