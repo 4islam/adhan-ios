@@ -218,55 +218,119 @@ class DashboardViewModel: ObservableObject {
     }
     
     func scheduleNotifications() {
-        guard isNotificationsAuthorized, !lastCalculatedFloats.isEmpty else { return }
+        LogManager.shared.log("Dashboard: scheduleNotifications() called. Auth=\(isNotificationsAuthorized)")
         
-        // Clear old ones
+        guard isNotificationsAuthorized else {
+            LogManager.shared.log("Dashboard: Aborting schedule. Auth missing.")
+            return
+        }
+        
+        // Clear all pending because we are about to rebuild the schedule for Today + Future
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        LogManager.shared.log("Dashboard: Cleared pending notifications.")
+        
+        guard let loc = LocationManager.shared.location else {
+            LogManager.shared.log("Dashboard: Location missing, cannot calculate times for scheduling.")
+            return
+        }
         
         let calendar = Calendar.current
-        let today = Date()
-        let year = calendar.component(.year, from: today)
-        let month = calendar.component(.month, from: today)
-        let day = calendar.component(.day, from: today)
+        let now = Date()
         
-        // validFloatTimes index mapping matches prayerNames
-        // [Fajr, Sunrise, SolarNoon, Dhuhr, Asr, Sunset, Maghrib, Isha, (Tahajjud)]
-        for (idx, name) in prayerNames.enumerated() {
-            guard idx < lastCalculatedFloats.count else { continue }
+        // Loop for Today (0) and Tomorrow (1)
+        for dayOffset in 0...1 {
+            guard let targetDate = calendar.date(byAdding: .day, value: dayOffset, to: now) else { continue }
             
-            // Skip events
-            if name == "Sunrise" || name == "Sunset" || name == "Solar Noon" { continue }
+            // --- Calculation Logic (Mirrors calculatePrayerTimes) ---
+            let pt = PrayerTimes()
+            if let method = PrayerTimes.CalculationMethod(rawValue: startCalcMethod) { pt.setCalcMethod(method) }
+            pt.setAsrMethod(asrForHanafi ? .hanafi : .shafii)
+            if let highLat = PrayerTimes.HighLatMethod(rawValue: highLatMethod) { pt.setHighLatsMethod(highLat) }
             
-            let floatTime = lastCalculatedFloats[idx]
-            let hour = Int(floatTime)
-            let minute = Int((floatTime - Double(hour)) * 60)
-            let second = Int(((floatTime * 60) - floor(floatTime * 60)) * 60)
+            pt.lat = loc.coordinate.latitude
+            pt.lng = loc.coordinate.longitude
+            pt.timeZone = pt.effectiveTimeZone(
+                year: calendar.component(.year, from: targetDate),
+                month: calendar.component(.month, from: targetDate),
+                day: calendar.component(.day, from: targetDate),
+                timeZone: nil
+            )
+            pt.jDate = pt.julianDate(
+                year: calendar.component(.year, from: targetDate),
+                month: calendar.component(.month, from: targetDate),
+                day: calendar.component(.day, from: targetDate)
+            ) - pt.lng / (15 * 24)
             
-            var components = DateComponents()
-            components.year = year
-            components.month = month
-            components.day = day
-            components.hour = hour
-            components.minute = minute
-            components.second = second
+            pt.computeMidDay(t: 12.0/24.0) // Internal state update
+            pt.setDhuhrMinutes(10.0)
             
-            if let date = calendar.date(from: components), date > today {
-                // Determine which Adhan file to use based on user preference
+            // Raw Floats: [Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib, Isha]
+            let floatTimes = pt.getPrayerTimes(date: targetDate, latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude)
+            guard !floatTimes.isEmpty else { continue }
+            
+            var validFloats = floatTimes.compactMap { Double($0) }
+            
+            // Apply Offsets
+            // Indices: 0=Fajr, 5=Maghrib, 6=Isha
+            validFloats[0] = (validFloats[0] + fajrOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+            validFloats[5] = (validFloats[5] + maghribOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+            validFloats[6] = (validFloats[6] + ishaOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+            
+            // Prepare list of prayers to schedule
+            // Indices: 0=Fajr, 1=Sunrise, 2=Dhuhr, 3=Asr, 4=Sunset, 5=Maghrib, 6=Isha
+            // Names array must match this indexing for basic prayers
+            let basicNames = ["Fajr", "Sunrise", "Dhuhr", "Asr", "Sunset", "Maghrib", "Isha"]
+            
+            // Tahajjud Calculation
+            var tahajjudTime: Double? = nil
+            if tahajjudEnabled {
+                // (Fajr - Offset)
+                tahajjudTime = (validFloats[0] - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+            }
+            
+            // Iterate and Schedule
+            for (idx, name) in basicNames.enumerated() {
+                // Skip events
+                if name == "Sunrise" || name == "Sunset" { continue }
+                
+                let floatTime = validFloats[idx]
+                scheduleSinglePrayer(name: name, floatTime: floatTime, baseDate: targetDate, calendar: calendar, checkDate: now)
+            }
+            
+            // Schedule Tahajjud if enabled
+            if let tTime = tahajjudTime {
+                scheduleSinglePrayer(name: "Tahajjud", floatTime: tTime, baseDate: targetDate, calendar: calendar, checkDate: now)
+            }
+        }
+    }
+    
+    private func scheduleSinglePrayer(name: String, floatTime: Double, baseDate: Date, calendar: Calendar, checkDate: Date) {
+        let hour = Int(floatTime)
+        let minute = Int((floatTime - Double(hour)) * 60)
+        let second = Int(((floatTime * 60) - floor(floatTime * 60)) * 60)
+        
+        var components = calendar.dateComponents([.year, .month, .day], from: baseDate)
+        components.hour = hour
+        components.minute = minute
+        components.second = second
+        
+        if let prayerDate = calendar.date(from: components) {
+            if prayerDate > checkDate {
+                LogManager.shared.log("Dashboard: Scheduling \(name) at \(prayerDate.formatted(date: .abbreviated, time: .standard))")
+                
                 let adhanFile = getAdhanFile(for: name)
                 
                 if adhanFile == "adhan_regular" || adhanFile == "adhan_fajr" {
-                   // Use the new Chain Logic for full duration
-                   let type = (adhanFile == "adhan_fajr") ? "fajr" : "regular"
-                   PrayerNotificationManager.shared.scheduleAdhanChain(startTime: date, prayerName: name, adhanType: type)
+                    let type = (adhanFile == "adhan_fajr") ? "fajr" : "regular"
+                    PrayerNotificationManager.shared.scheduleAdhanChain(startTime: prayerDate, prayerName: name, adhanType: type)
                 } else {
-                   // Fallback for custom files (Legacy Single Notification)
-                   NotificationManager.shared.schedulePrayerNotification(
-                       id: "prayer_\(name)",
-                       title: "\(name) Prayer",
-                       body: "It is time for \(name) prayer.",
-                       date: date,
-                       soundName: adhanFile
-                   )
+                    NotificationManager.shared.schedulePrayerNotification(
+                        id: "prayer_\(name)_\(prayerDate.timeIntervalSince1970)",
+                        title: "\(name) Prayer",
+                        body: "It is time for \(name) prayer.",
+                        date: prayerDate,
+                        soundName: adhanFile
+                    )
                 }
             }
         }

@@ -149,7 +149,7 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
             if let error = error {
                 LogManager.shared.log("Notifications: Failed to schedule \(title): \(error.localizedDescription)")
             } else {
-                LogManager.shared.log("Notifications: Scheduled \(title) at \(date.formatted(date: .omitted, time: .standard)) with sound: \(requestedSound)")
+                LogManager.shared.log("Notifications: Scheduled \(title) at \(date.formatted(date: .abbreviated, time: .standard)) with sound: \(requestedSound)")
             }
         }
     }
@@ -164,9 +164,9 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
                     for req in requests {
                         var triggerInfo = "Unknown time"
                         if let trig = req.trigger as? UNCalendarNotificationTrigger, let date = trig.nextTriggerDate() {
-                            triggerInfo = date.formatted(date: .omitted, time: .standard)
+                            triggerInfo = date.formatted(date: .abbreviated, time: .standard)
                         } else if let trig = req.trigger as? UNTimeIntervalNotificationTrigger, let date = trig.nextTriggerDate() {
-                            triggerInfo = date.formatted(date: .omitted, time: .standard)
+                            triggerInfo = date.formatted(date: .abbreviated, time: .standard)
                         }
                         LogManager.shared.log("ID: \(req.identifier) | Trigger: \(triggerInfo)")
                     }

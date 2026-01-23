@@ -52,7 +52,7 @@ struct SettingsView: View {
                 }
                 
                 NavigationLink(destination: LogsView()) {
-                    Label("Error Logs", systemImage: "exclamationmark.triangle.fill")
+                    Label("App Logs", systemImage: "list.bullet.rectangle.portrait.fill")
                 }
             }
         }
@@ -133,7 +133,7 @@ struct LogsView: View {
                 }
             }
         }
-        .navigationTitle("Error Logs")
+        .navigationTitle("App Logs")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack {

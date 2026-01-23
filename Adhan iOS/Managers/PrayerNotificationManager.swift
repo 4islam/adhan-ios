@@ -11,7 +11,7 @@ class PrayerNotificationManager: NSObject {
     
     // Schedule a chain of notifications
     func scheduleAdhanChain(startTime: Date, prayerName: String, adhanType: String = "regular") {
-        LogManager.shared.log("PrayerManager: Scheduling chain for \(prayerName) (\(adhanType)) starting at \(startTime.formatted(date: .omitted, time: .standard))")
+        LogManager.shared.log("PrayerManager: Scheduling chain for \(prayerName) (\(adhanType)) starting at \(startTime.formatted(date: .abbreviated, time: .standard))")
         
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             guard settings.authorizationStatus == .authorized else {
