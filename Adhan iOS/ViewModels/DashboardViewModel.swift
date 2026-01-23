@@ -54,6 +54,8 @@ class DashboardViewModel: ObservableObject {
     
     @Published var isLocationAuthorized: Bool = false
     @Published var isNotificationsAuthorized: Bool = false
+    @Published var isLoading: Bool = true
+    @Published var loadingStatus: String = "Starting..."
     
     private var timer: AnyCancellable?
     private var cancellables = Set<AnyCancellable>()
@@ -408,7 +410,13 @@ class DashboardViewModel: ObservableObject {
     }
     
     func calculatePrayerTimes(location: LocationManager) {
-        guard let loc = location.location else { return }
+        guard let loc = location.location else {
+            // Still waiting for location
+            self.loadingStatus = "Locating..."
+            return
+        }
+        
+        self.loadingStatus = "Calculating Schedule..."
         
         let date = Date()
         let pt = PrayerTimes()
@@ -623,6 +631,14 @@ class DashboardViewModel: ObservableObject {
             location: self.locationName,
             hijri: self.hijriDateString
         )
+        
+        // MINIMUM LOAD TIME ENFORCEMENT
+        // Ensure the user sees "Initializing..." for at least 2.5 seconds total
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation {
+                self.isLoading = false
+            }
+        }
     }
     
     private func reverseGeocode(_ location: CLLocation) {

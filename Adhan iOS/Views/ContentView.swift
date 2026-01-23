@@ -11,74 +11,96 @@ struct ContentView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                BackgroundView(sunPos: viewModel.sunPosition, moonPos: viewModel.moonPosition)
-                
-                // Unified ScrollView
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            permissionBanner
-                            
-                            verseHeader
-                            
-                            heroSection
-                                .padding(.bottom, 10)
-                            
-                            // Prayer List
-                            VStack(spacing: 12) {
-                                ForEach(viewModel.dashboardItems) { item in
-                                    PrayerCard(
-                                        name: item.title,
-                                        time: item.time,
-                                        isNext: item.isNext,
-                                        type: item.type
-                                    )
-                                    .id(item.id)
-                                    .padding(.horizontal, 24)
-                                    .scrollTransition { content, phase in
-                                        content
-                                            .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
-                                            .opacity(phase.isIdentity ? 1.0 : 0.8)
+            if viewModel.isLoading {
+                ZStack {
+                    Color.black.edgesIgnoringSafeArea(.all)
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.5)
+                        Text(viewModel.loadingStatus)
+                            .foregroundColor(.white.opacity(0.8))
+                            .font(.system(.body, design: .rounded))
+                        Text(viewModel.locationName) // Show "Locating..." or "Location found"
+                             .foregroundColor(.gray)
+                             .font(.caption)
+                    }
+                }
+            } else {
+                ZStack {
+                    BackgroundView(sunPos: viewModel.sunPosition, moonPos: viewModel.moonPosition)
+                    
+                    // Unified ScrollView
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(spacing: 16) {
+                                permissionBanner
+                                
+                                verseHeader
+                                
+                                heroSection
+                                    .padding(.bottom, 10)
+                                
+                                // Prayer List
+                                VStack(spacing: 12) {
+                                    ForEach(viewModel.dashboardItems) { item in
+                                        PrayerCard(
+                                            name: item.title,
+                                            time: item.time,
+                                            isNext: item.isNext,
+                                            type: item.type
+                                        )
+                                        .id(item.id)
+                                        .padding(.horizontal, 24)
+                                        .scrollTransition { content, phase in
+                                            content
+                                                .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
+                                                .opacity(phase.isIdentity ? 1.0 : 0.8)
+                                        }
+                                    }
+                                }
+                                
+                                Spacer().frame(height: 120) // Space for bottom dock
+                            }
+                        }
+                        .scrollIndicators(.hidden)
+                        .onAppear {
+                            // Scroll to next prayer on appear
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                if let nextItem = viewModel.dashboardItems.first(where: { $0.isNext }) {
+                                    withAnimation(.spring) {
+                                        proxy.scrollTo(nextItem.id, anchor: .center)
                                     }
                                 }
                             }
-                            
-                            Spacer().frame(height: 120) // Space for bottom dock
                         }
                     }
-                    .scrollIndicators(.hidden)
-                    .onAppear {
-                        // Scroll to next prayer on appear
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            if let nextItem = viewModel.dashboardItems.first(where: { $0.isNext }) {
-                                withAnimation(.spring) {
-                                    proxy.scrollTo(nextItem.id, anchor: .center)
-                                }
-                            }
-                        }
+                    
+                    VStack {
+                        Spacer()
+                        AstroSummaryPanel(
+                            sunRise: viewModel.sunRise,
+                            solarNoon: viewModel.solarNoon,
+                            sunSet: viewModel.sunSet,
+                            moonRise: viewModel.moonrise,
+                            moonSet: viewModel.moonset
+                        )
+                        .padding(.bottom, 90) // Tighter above bottom dock
                     }
+                    .ignoresSafeArea(.keyboard)
+                    
+                    bottomDock
+                    
+                    audioOverlay
                 }
-                
-                VStack {
-                    Spacer()
-                    AstroSummaryPanel(
-                        sunRise: viewModel.sunRise,
-                        solarNoon: viewModel.solarNoon,
-                        sunSet: viewModel.sunSet,
-                        moonRise: viewModel.moonrise,
-                        moonSet: viewModel.moonset
-                    )
-                    .padding(.bottom, 90) // Tighter above bottom dock
-                }
-                .ignoresSafeArea(.keyboard) 
-                
-                bottomDock
-                
-                audioOverlay
             }
-            .navigationBarHidden(true)
+            // ZStack End
+            // .navigationBarHidden(true) applied to ZStack content previously, wait.
+            // Original code: NavigationStack { ZStack { ... } .navigationBarHidden(true) }
+            // Now: NavigationStack { if loading { ... } else { ZStack { ... } } }
+            // So we should apply modifiers to the group or handle navigation title.
         }
+        .navigationBarHidden(true) // Apply to the NavigationStack content container
         .environmentObject(viewModel)
         .onAppear {
             viewModel.calculatePrayerTimes(location: locationManager)
