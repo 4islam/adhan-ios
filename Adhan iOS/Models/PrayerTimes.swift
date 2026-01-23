@@ -112,6 +112,36 @@ public class PrayerTimes {
         return getDatePrayerTimes(year: year, month: month, day: day, latitude: latitude, longitude: longitude, timeZone: timeZone)
     }
     
+    // Return raw doubles avoiding string conversion issues
+    public func getPrayerTimesDoubles(date: Date, latitude: Double, longitude: Double, timeZone: Double? = nil) -> [Double] {
+        let calendar = Calendar(identifier: .gregorian)
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        
+        guard let year = components.year, let month = components.month, let day = components.day else {
+            print("PrayerTimes Error: Components missing for date: \(date). Year: \(String(describing: components.year))")
+            return []
+        }
+        
+        // Setup internal state
+        self.lat = latitude
+        self.lng = longitude
+        self.timeZone = effectiveTimeZone(year: year, month: month, day: day, timeZone: timeZone)
+        self.jDate = julianDate(year: year, month: month, day: day) - longitude / (15 * 24)
+        
+        // Compute
+        var times: [Double] = [5, 6, 12, 13, 18, 18, 18]
+        for _ in 1...self.numIterations {
+            times = computeTimes(times: times)
+        }
+        let result = adjustTimes(times)
+        
+        if result.isEmpty {
+           print("PrayerTimes Error: adjustTimes returned empty!")
+        }
+        
+        return result
+    }
+    
     public func setCalcMethod(_ method: CalculationMethod) {
         self.calcMethod = method
     }

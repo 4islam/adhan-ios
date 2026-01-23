@@ -76,6 +76,10 @@ class PrayerNotificationManager: NSObject {
             
             content.categoryIdentifier = "PRAYER_CHAIN"
             content.threadIdentifier = "prayer_chain_\(prayerName)"
+            content.userInfo = [
+                "ADHAN_FILE": soundName,
+                "PRAYER_NAME": prayerName
+            ]
             content.interruptionLevel = .timeSensitive
             
             let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: triggerDate)
@@ -94,7 +98,7 @@ class PrayerNotificationManager: NSObject {
             currentOffset += chunkDuration
         }
         
-        LogManager.shared.log("PrayerManager: Scheduled \(chunkCount) chunks for \(prayerName). Total duration: \(String(format: "%.1f", currentOffset))s")
+        LogManager.shared.log("PrayerManager: Scheduled \(chunkCount) chunks for \(prayerName) on \(startTime.formatted(date: .abbreviated, time: .omitted)). Total duration: \(String(format: "%.1f", currentOffset))s")
     }
     
     private func getAudioDuration(url: URL) -> TimeInterval {

@@ -48,7 +48,7 @@ class DashboardViewModel: ObservableObject {
     @Published var moonPosition: AstroPosition?
     @Published var midnightTime: String = "--:--"
     
-    private var lastCalculatedFloats: [Double] = []
+    var lastCalculatedFloats: [Double] = []
     private var lastCalculationDate: Date?
     private var lastTriggeredPrayer: String? // Track to avoid double Adhan
     
@@ -97,12 +97,27 @@ class DashboardViewModel: ObservableObject {
         self.isLocationAuthorized = (locStatus == .authorizedAlways || locStatus == .authorizedWhenInUse)
         
         // Notification status
+        // Initial check
         UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
-                self.isNotificationsAuthorized = (settings.authorizationStatus == .authorized)
-            }
+             DispatchQueue.main.async {
+                 self.isNotificationsAuthorized = (settings.authorizationStatus == .authorized)
+                 LogManager.shared.log("Dashboard: CheckPermissions -> Auth Status: \(settings.authorizationStatus.rawValue)")
+             }
         }
+        
+        // Subscribe to Manager updates
+        NotificationManager.shared.$isAuthorized
+            .receive(on: RunLoop.main)
+            .sink { [weak self] authorized in
+                self?.isNotificationsAuthorized = authorized
+                if authorized {
+                    LogManager.shared.log("Dashboard: Authorization confirmed. Re-attempting schedule.")
+                    self?.scheduleNotifications()
+                }
+            }
+            .store(in: &cancellables)
     }
+
     
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
@@ -159,9 +174,9 @@ class DashboardViewModel: ObservableObject {
         }
     }
     
-    func updateVerse() {
+    func updateVerse(date: Date = Date()) {
         let calendar = Calendar.current
-        let now = Date()
+        let now = date
         let weekday = calendar.component(.weekday, from: now) // Sunday=1, Friday=6
         
         var showFridayVerse = false
@@ -195,6 +210,12 @@ class DashboardViewModel: ObservableObject {
             currentVerseArabic = "...إِنَّ ٱلصَّلَوٰةَ كَانَتْ عَلَى ٱلْمُؤْمِنِينَ كِتَٰبًا مَّوْقُوتًا"
             currentVerseEnglish = "...verily Prayer is enjoined on the believers to be performed at fixed hours. 4:104"
         }
+    }
+    
+    func refreshSettings() {
+        print("DashboardViewModel: Settings changed. Forcing recalculation...")
+        self.lastCalculationDate = nil // Bypass throttle
+        updateTime()
     }
     
     func updateTime() {
@@ -259,6 +280,7 @@ class DashboardViewModel: ObservableObject {
             if let method = PrayerTimes.CalculationMethod(rawValue: startCalcMethod) { pt.setCalcMethod(method) }
             pt.setAsrMethod(asrForHanafi ? .hanafi : .shafii)
             if let highLat = PrayerTimes.HighLatMethod(rawValue: highLatMethod) { pt.setHighLatsMethod(highLat) }
+            pt.setTimeFormat(.float) // Critical: Ensure we get Double-compatible strings or raw floats if method supports it
             
             pt.lat = loc.coordinate.latitude
             pt.lng = loc.coordinate.longitude
@@ -277,15 +299,18 @@ class DashboardViewModel: ObservableObject {
             pt.computeMidDay(t: 12.0/24.0)
             pt.setDhuhrMinutes(10.0)
             
-            let floatTimes = pt.getPrayerTimes(date: targetDate, latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude)
-            if floatTimes.isEmpty {
+            // Raw Floats: [Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib, Isha]
+            var validFloats = pt.getPrayerTimesDoubles(date: targetDate, latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude)
+            
+            // Safety Check: Ensure we have enough data (Expect: Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib, Isha = 7)
+            if validFloats.count < 7 {
+                LogManager.shared.log("Dashboard: Warning! Insufficient prayer times calculated for dayOffset \(dayOffset). Count: \(validFloats.count). Skipping.")
                 dayOffset += 1
                 continue
             }
             
-            var validFloats = floatTimes.compactMap { Double($0) }
-            
             // Apply Offsets
+            // Indices: 0=Fajr, 5=Maghrib, 6=Isha
             validFloats[0] = (validFloats[0] + fajrOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             validFloats[5] = (validFloats[5] + maghribOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             validFloats[6] = (validFloats[6] + ishaOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)

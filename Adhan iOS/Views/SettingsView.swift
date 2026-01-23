@@ -34,6 +34,9 @@ struct SettingsView: View {
                     Text("12 Hour (No Suffix)").tag(2)
                 }
                 .pickerStyle(SegmentedPickerStyle())
+                .onChange(of: timeFormat) { _ in
+                    viewModel.refreshSettings()
+                }
                 
                 Button(action: {
                     let _ = URL(string: "shortcuts://create-shortcut?name=Play%20Adhan&action=PlayAdhanIntent")!
@@ -77,7 +80,7 @@ struct TestingView: View {
                     AudioManager.shared.playAdhan(fileName: "adhan_regular")
                 }
                 Button("Play Chunk 1") {
-                    AudioManager.shared.playAdhan(fileName: "adhan_regular_01.caf")
+                    AudioManager.shared.playAdhan(fileName: "1r.caf")
                 }
                 Button("Stop Audio") {
                     AudioManager.shared.stop()
@@ -105,6 +108,12 @@ struct TestingView: View {
                         LogManager.shared.log("Manual Reset: Notifications rescheduled.")
                     }
                 }.foregroundColor(.red)
+                
+                Button("Run Unit Tests") {
+                    LogManager.shared.log("Running Manual Tests...")
+                    ManualTests.shared.log = { LogManager.shared.log($0) }
+                    ManualTests.shared.runAllTests()
+                }.foregroundColor(.blue)
             }
         }
         .navigationTitle("Testing Tools")
@@ -137,6 +146,14 @@ struct LogsView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack {
+                    Button(action: {
+                        let text = logManager.logs.map { "\($0.formattedTimestamp): \($0.message)" }.joined(separator: "\n")
+                        UIPasteboard.general.string = text
+                        // Optional: Show a temporary confirmation or rely on standard UI feedback
+                    }) {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    
                     Button("Audit") {
                         NotificationManager.shared.logPendingNotifications()
                     }
