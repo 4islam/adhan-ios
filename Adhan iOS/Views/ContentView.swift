@@ -130,7 +130,7 @@ struct ContentView: View {
                 .fontWeight(.bold)
                 .multilineTextAlignment(.center)
             
-            Text(viewModel.currentVerseEnglish)
+            Text(LocalizedStringKey(viewModel.currentVerseEnglish))
                 .font(.system(.subheadline, design: .serif))
                 .italic()
                 .multilineTextAlignment(.center)

@@ -87,7 +87,7 @@ class DashboardViewModel: ObservableObject {
     
     init() {
         startTimer()
-        updateBanner()
+        updateVerse()
         checkPermissions()
     }
     
@@ -139,6 +139,7 @@ class DashboardViewModel: ObservableObject {
     
     private func handleTimerTick() {
         updateTime()
+        updateVerse()
         // If we are in background, we might need to extend the task or trigger silent audio
         // but for now, rely on LocationManager's 'Always' state + BACKGROUND audio session.
     }
@@ -158,13 +159,38 @@ class DashboardViewModel: ObservableObject {
         }
     }
     
-    func updateBanner() {
-        let weekday = Calendar.current.component(.weekday, from: Date())
-        // Sunday=1, Friday=6
+    func updateVerse() {
+        let calendar = Calendar.current
+        let now = Date()
+        let weekday = calendar.component(.weekday, from: now) // Sunday=1, Friday=6
+        
+        var showFridayVerse = false
         
         if weekday == 6 {
+            // Check time constraint: Until 30 mins to Maghrib
+            // Maghrib is index 6 in lastCalculatedFloats [Fajr, Sunrise, SolarNoon, Dhuhr, Asr, Sunset, Maghrib, Isha, (Tahajjud)]
+            if lastCalculatedFloats.count > 6 {
+                let maghribFloat = lastCalculatedFloats[6]
+                
+                let components = calendar.dateComponents([.hour, .minute, .second], from: now)
+                let currentHour = Double(components.hour!) + Double(components.minute!) / 60.0 + Double(components.second!) / 3600.0
+                
+                // If current time is BEFORE (Maghrib - 30 mins)
+                if currentHour < (maghribFloat - 30.0/60.0) {
+                    showFridayVerse = true
+                }
+            } else {
+                // Determine sensible default if no calc yet? 
+                // Getting floats is fast, so this is likely a brief fringe case.
+                // We'll show standard to be safe, or Friday if we trust we are early in day.
+                // Let's assume standard until calc is ready to avoid flashing wrong state at Maghrib time.
+                showFridayVerse = false 
+            }
+        }
+        
+        if showFridayVerse {
             currentVerseArabic = "يَٰٓأَيُّهَا ٱلَّذِينَ ءَامَنُوٓا۟ إِذَا نُودِىَ لِلصَّلَوٰةِ مِن يَوْمِ ٱلْجُمُعَةِ فَٱسْعَوْا۟ إِلَىٰ ذِكْرِ ٱللَّهِ وَذَرُوا۟ ٱلْبَيْعَ ۚ ذَٰلِكُمْ خَيْرٌ لَّكُمْ إِن كُنتُمْ تَعْلَمُونَ"
-            currentVerseEnglish = "O ye who believe! when the call is made for Prayer on Friday, hasten to the remembrance of Allah, and leave off all business. That is better for you, if you only knew. 62:10"
+            currentVerseEnglish = "O ye who believe! when the call is made for Prayer on Friday, hasten to the remembrance of Allah, and leave off _all_business. That is better for you, if you only knew. 62:10"
         } else {
             currentVerseArabic = "...إِنَّ ٱلصَّلَوٰةَ كَانَتْ عَلَى ٱلْمُؤْمِنِينَ كِتَٰبًا مَّوْقُوتًا"
             currentVerseEnglish = "...verily Prayer is enjoined on the believers to be performed at fixed hours. 4:104"
