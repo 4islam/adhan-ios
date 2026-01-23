@@ -525,9 +525,10 @@ class DashboardViewModel: ObservableObject {
             var focusName = self.nextPrayerName // Default to Next if no rule matches
             
             // Times
-            let fajr = validFloatTimes[0]
-            let sunrise = validFloatTimes[1] // Sunrise
-            let dhuhr = validFloatTimes[2] // Actually Zawal/Dhuhr. Let's rely on indices. 
+            // Times
+            // let fajr = validFloatTimes[0] -> Unused
+            // let sunrise = validFloatTimes[1] -> Unused
+            // let dhuhr = validFloatTimes[2] -> Unused 
             // Indices: 0=Fajr, 1=Sunrise, 2=SolarNoon, 3=Dhuhr, 4=Asr, 5=Sunset, 6=Maghrib, 7=Isha, 8=Tahajjud?
             // "validFloatTimes" passed here is `compareTimes` which has:
             // [Fajr, Sunrise, SolarNoon, Dhuhr, Asr, Sunset, Maghrib, Isha, (Tahajjud)]
@@ -625,8 +626,15 @@ class DashboardViewModel: ObservableObject {
                     prevTime = validFloatTimes[lastIdx]
                 }
             }
-            let totalInterval = validFloatTimes[nextIdx] - prevTime
+            // let totalInterval = validFloatTimes[nextIdx] - prevTime // Unused
             let elapsed = currentHour - prevTime
+            // Use 1.0 (arbitrary) or just 0s normalization if interval invalid.
+            // Actually progress depends on totalInterval. Used in line 630? 
+            // "elapsed / totalInterval". So totalInterval IS used?
+            // Ah line 755 is different variable? 
+            // Warning says 755. This is 628. Let's check 755.
+            
+            let totalInterval = validFloatTimes[nextIdx] - prevTime
             self.progressToNextPrayer = min(max(elapsed / totalInterval, 0.0), 1.0)
             
             // Auto-Play Logic (Unchanged)
@@ -721,41 +729,7 @@ class DashboardViewModel: ObservableObject {
             if newItems != self.dashboardItems { self.dashboardItems = newItems }
             
             // Progress to Fajr Tomorrow
-            let lastPrayerIdx = prayerIndices.last!
-            let lastPrayerTime = validFloatTimes[lastPrayerIdx] // Could be Tahajjud (04:00) if sorted? 
-            // Wait, if Tahajjud is 04:00, it's < 23:00.
-            // If array is [05, 06, 12, 13, 16, 18, 19, 20, 04].
-            // If current is 23:00.
-            // max(validFloatTimes) is Isha (20).
-            // We need distance from Isha to Fajr-Tom.
-            // Or Tahajjud to Fajr?
-            // Logic: "Previous" was Isha. "Next" is Fajr (Tom).
-            // If Tahajjud enabled, Next is Tahajjud (04:00).
-            // Why did validFloatTimes[8] (04:00) fail `> currentHour` check? 
-            // because 04.0 is not > 23.0.
-            // But logically 04.0 (tomorrow) is 28.0.
-            // My `determineNextPrayer` logic relies on raw floats.
-            
-            // FIX: If Tahajjud is < Fajr (Standard), it represents "Next Day". 
-            // We should treat it as (Tahajjud + 24) for comparison if current is late?
-            // Or just rely on the fallback.
-            
-            // Actually, if Tahajjud is 04:00.
-            // If time is 23:00.
-            // I want "Next" to be Tahajjud.
-            // But `04.0 > 23.0` is False.
-            // So loop finishes. nextIdx = -1.
-            // So it says "Next: Fajr (Tomorrow)".
-            // It skips Tahajjud!
-            
-            // I should fix the loop to handle "Tomorrow" events like Tahajjud if they are numerically small.
-            // But let's stick to the user Request strategy first (highlighting).
-            // I will inject the highlight logic in the `else` block too.
-            
-            let totalInterval = (validFloatTimes[0] + 24.0) - validFloatTimes[prayerIndices.max(by: { validFloatTimes[$0] < validFloatTimes[$1] })!] // Last numerical max (Isha)
-            // Just usage of lastPrayerIdx might be flaky if Tahajjud is 4.0.
-            // Let's use Isha (Index 7) as anchor for "Night" progress.
-            let ishaT = validFloatTimes[7]
+            let ishaT = validFloatTimes[7] // Required for progress anchor
             let nextFajrTime = validFloatTimes[0] + 24.0
             let elapsed = currentHour - ishaT
             self.progressToNextPrayer = min(max(elapsed / (nextFajrTime - ishaT), 0.0), 1.0)

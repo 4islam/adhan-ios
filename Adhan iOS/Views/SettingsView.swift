@@ -36,7 +36,7 @@ struct SettingsView: View {
                 .pickerStyle(SegmentedPickerStyle())
                 
                 Button(action: {
-                    let url = URL(string: "shortcuts://create-shortcut?name=Play%20Adhan&action=PlayAdhanIntent")!
+                    let _ = URL(string: "shortcuts://create-shortcut?name=Play%20Adhan&action=PlayAdhanIntent")!
                      if let shortcutsURL = URL(string: "shortcuts://") {
                         UIApplication.shared.open(shortcutsURL)
                     }
