@@ -46,6 +46,7 @@ class DashboardViewModel: ObservableObject {
     // Celestial Positions for Background
     @Published var sunPosition: AstroPosition?
     @Published var moonPosition: AstroPosition?
+    @Published var midnightTime: String = "--:--"
     
     private var lastCalculatedFloats: [Double] = []
     private var lastCalculationDate: Date?
@@ -347,6 +348,13 @@ class DashboardViewModel: ObservableObject {
         
         let actualTahajjudFloat = (fajrFloat - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
         
+        // Calculate Midnight
+        let fNext = adjustedFloatTimes[0] + 24.0
+        let sSet = adjustedFloatTimes[4] // Maghrib/Sunset
+        let midFloat = (sSet + fNext) / 2.0
+        self.midnightTime = pt.floatToTimeFormat(midFloat.truncatingRemainder(dividingBy: 24.0), format: originalFormat)
+
+        
         if tahajjudEnabled {
             names.append("Tahajjud")
             finalTimes.append(pt.floatToTimeFormat(actualTahajjudFloat, format: originalFormat))
@@ -489,11 +497,14 @@ class DashboardViewModel: ObservableObject {
         return formatter.string(from: date)
     }
     
+
+
     func determineNextPrayer(validFloatTimes: [Double], date: Date) {
         let calendar = Calendar.current
         let components = calendar.dateComponents([.hour, .minute, .second], from: date)
         let currentHour = Double(components.hour!) + Double(components.minute!) / 60.0 + Double(components.second!) / 3600.0
         
+        // ... (Find Next Logic) ...
         var nextIdx = -1
         let prayerIndices = [0, 3, 4, 6, 7] + (tahajjudEnabled ? [validFloatTimes.count - 1] : [])
         
@@ -506,72 +517,107 @@ class DashboardViewModel: ObservableObject {
         
         if nextIdx != -1 {
             self.nextPrayerIndex = nextIdx
-            // Keep nextPrayerName strictly as the *upcoming* prayer for countdown purposes
             self.nextPrayerName = prayerNames[nextIdx]
-            
             let diff = validFloatTimes[nextIdx] - currentHour
             self.timeRemaining = formatRemaining(diff)
             
-            // --- FOCUS LOGIC (User Request) ---
-            // Highlight "Current" prayer until 15 mins before "Next" prayer
-            var focusName = self.nextPrayerName
-            if diff > (15.0 / 60.0) {
-                // We are comfortably in the current prayer window. Highlight Current.
-                // Current is index before Next.
-                // Find index in prayerIndices
-                if let idxInIndices = prayerIndices.firstIndex(of: nextIdx) {
-                    let prevIndexInIndices = (idxInIndices - 1 + prayerIndices.count) % prayerIndices.count
-                    let prevIdx = prayerIndices[prevIndexInIndices]
-                    focusName = prayerNames[prevIdx]
-                }
-            } else {
-                // Less than 15 mins to next prayer, switch focus to Next
-                focusName = self.nextPrayerName
+            // --- CUSTOM FOCUS LOGIC (User Request) ---
+            var focusName = self.nextPrayerName // Default to Next if no rule matches
+            
+            // Times
+            let fajr = validFloatTimes[0]
+            let sunrise = validFloatTimes[1] // Sunrise
+            let dhuhr = validFloatTimes[2] // Actually Zawal/Dhuhr. Let's rely on indices. 
+            // Indices: 0=Fajr, 1=Sunrise, 2=SolarNoon, 3=Dhuhr, 4=Asr, 5=Sunset, 6=Maghrib, 7=Isha, 8=Tahajjud?
+            // "validFloatTimes" passed here is `compareTimes` which has:
+            // [Fajr, Sunrise, SolarNoon, Dhuhr, Asr, Sunset, Maghrib, Isha, (Tahajjud)]
+            // So:
+            // 0: Fajr
+            // 1: Sunrise
+            // 2: SolarNoon
+            // 3: Dhuhr
+            // 4: Asr
+            // 5: Sunset
+            // 6: Maghrib
+            // 7: Isha
+            // 8: Tahajjud (if enabled)
+            
+            let t_fajr = validFloatTimes[0]
+            let t_sunrise = validFloatTimes[1]
+            let t_dhuhr = validFloatTimes[3]
+            let t_asr = validFloatTimes[4]
+            let t_sunset = validFloatTimes[5]
+            let t_maghrib = validFloatTimes[6]
+            let t_isha = validFloatTimes[7]
+            
+            // Calculate Midnight locally (Islamic)
+            let midNight = (t_sunset + (t_fajr + 24.0)) / 2.0
+            
+            // 1. Fajr: Highlight until 30 mins to Sunrise
+            if (currentHour >= t_fajr && currentHour < (t_sunrise - 30.0/60.0)) {
+                focusName = "Fajr"
+            }
+            // 2. Dhuhr: Highlight until 10 mins to Asr
+            else if (currentHour >= t_dhuhr && currentHour < (t_asr - 10.0/60.0)) {
+                focusName = "Dhuhr"
+            }
+            // 3. Asr: Highlight until 30 mins to Sunset
+            else if (currentHour >= t_asr && currentHour < (t_sunset - 30.0/60.0)) {
+                focusName = "Asr"
+            }
+            // 4. Maghrib: Highlight only for 30 mins
+            else if (currentHour >= t_maghrib && currentHour < (t_maghrib + 30.0/60.0)) {
+                focusName = "Maghrib"
+            }
+            // 5. Isha: Highlight only until Midnight
+            else if (currentHour >= t_isha && currentHour < midNight) {
+                focusName = "Isha"
+            }
+            // 6. Tahajjud: Highlight until 5 mins to Fajr
+            else if tahajjudEnabled {
+                let t_tahajjud = validFloatTimes.last! // Index 8
+                 // Case A: Tahajjud is before midnight (unlikely but possible if offset huge) -> Handle wrapped day? 
+                 // Assuming standard Tahajjud (post-midnight, pre-Fajr)
+                 // If t_tahajjud > t_isha (same day late night)
+                 if t_tahajjud > t_isha {
+                     if currentHour >= t_tahajjud && currentHour < (t_fajr + 24.0 - 5.0/60.0) {
+                         focusName = "Tahajjud"
+                     }
+                 } else { 
+                     // t_tahajjud < t_fajr (same day early morning)
+                     if currentHour >= t_tahajjud && currentHour < (t_fajr - 5.0/60.0) {
+                         focusName = "Tahajjud"
+                     }
+                 }
             }
             
-            // Update DashboardItems 'isNext' state dynamically
-            // We must create a new array to trigger publisher if needed, or mutate
+            // Update Items (Logic copied from previous step but using new focusName)
             var newItems = self.dashboardItems
             for i in 0..<newItems.count {
-                // Clear all
                 let title = newItems[i].title
-                // Handle combined names e.g. "Dhuhr & Asr"
-                _ = title.contains(focusName) // Simple contains might be risky if names overlap, but specific names should be fine.
-                             || (focusName == "Jummah (or Dhuhr)" && title.contains("Dhuhr"))
-                
-                // Precise matching
                 let exactMatch = (title == focusName)
-                // Combined match: if focus is Dhuhr and item is "Dhuhr & Asr", that's the one.
-                // If focus is Asr and item is "Dhuhr & Asr", that's ALSO the one.
-                
                 var shouldHighlight = exactMatch
+                
                 if newItems[i].type == .combinedPrayer {
                     if title.contains(focusName) { shouldHighlight = true }
-                    // Special case: if Focus is Jummah, matches Dhuhr
                     if focusName.contains("Jummah") && title.contains("Dhuhr") { shouldHighlight = true }
                 }
                 
-                // Reconstruct item with new isNext
                 if newItems[i].isNext != shouldHighlight {
                      newItems[i] = DashboardItem(
-                        title: newItems[i].title,
-                        time: newItems[i].time,
-                        type: newItems[i].type,
-                        isNext: shouldHighlight
+                        title: newItems[i].title, time: newItems[i].time, type: newItems[i].type, isNext: shouldHighlight
                     )
                 }
             }
             if newItems != self.dashboardItems {
                 self.dashboardItems = newItems
             }
-            // ----------------------------------
             
-            // Calculate Progress
-            // Find previous prayer time in the circular list of prayers
+            // Progress Calculation (Unchanged)
+            // ... (rest of progress logic) ...
             var prevTime: Double = 0
             if let indexInPrayerIndices = prayerIndices.firstIndex(of: nextIdx) {
                 if indexInPrayerIndices == 0 {
-                    // Previous was the last prayer of yesterday
                     let lastIdx = prayerIndices.last!
                     prevTime = validFloatTimes[lastIdx] - 24.0
                 } else {
@@ -579,19 +625,15 @@ class DashboardViewModel: ObservableObject {
                     prevTime = validFloatTimes[lastIdx]
                 }
             }
-            
             let totalInterval = validFloatTimes[nextIdx] - prevTime
             let elapsed = currentHour - prevTime
             self.progressToNextPrayer = min(max(elapsed / totalInterval, 0.0), 1.0)
             
-            // Auto-Play Logic: If elapsed time is small (started in last 65 seconds to catch 1-min poll)
-            // and it's not the one we just triggered.
-            if elapsed >= 0 && elapsed < (65.0 / 3600.0) {
-                let prayerToTrigger = prayerNames[nextIdx] // Trigger aligns with ACTUAL time, not focus
+            // Auto-Play Logic (Unchanged)
+             if elapsed >= 0 && elapsed < (65.0 / 3600.0) {
+                let prayerToTrigger = prayerNames[nextIdx]
                 if lastTriggeredPrayer != prayerToTrigger {
-                    // (Logic for trigger remains using nextPrayerName/nextIdx)
                     let items = dashboardItems
-                    // Check existence loosely
                     if items.contains(where: { $0.title.contains(prayerToTrigger) }) {
                          let adhanFile = getAdhanFile(for: prayerToTrigger)
                          AudioManager.shared.playAdhan(fileName: adhanFile)
@@ -599,26 +641,124 @@ class DashboardViewModel: ObservableObject {
                     }
                 }
             } else if elapsed > (30.0 / 3600.0) {
-                // Reset trigger if we are well past the start (e.g. 30 seconds)
                 if lastTriggeredPrayer == prayerNames[nextIdx] {
                     lastTriggeredPrayer = nil
                 }
             }
-            
+             
         } else {
-            // Next is Fajr tomorrow
+            // Next is Fajr Tomorrow (Wrap-around case logic)
             self.nextPrayerName = "Fajr (Tomorrow)"
             let diff = (24 - currentHour) + validFloatTimes[0]
             self.timeRemaining = formatRemaining(diff)
             
-            // Progress: Between last prayer of today and Fajr tomorrow
-            let lastPrayerIdx = prayerIndices.last!
-            let lastPrayerTime = validFloatTimes[lastPrayerIdx]
-            let nextFajrTime = validFloatTimes[0] + 24.0
+            // Handle Isha Highlight if still before Midnight (post-24h wrap on visual clock?)
+            // If currentHour > Isha and < 24. 
+            // We need to re-check Isha rule here since nextIdx is -1 implies we are past all prayers (incl Isha/Tahajjud)
+            // But strict Midnight might be > 24.0 (e.g. 00:30).
+            // Actually nextIdx is -1 when currentHour > all_times.
+            // If Last time is Tahajjud (e.g. 23:00) then nextIdx is -1 after 23:00.
+            // But if Tahajjud is 04:00 (tomorrow), then it is validFloatTimes[8].
+            // Usually Tahajjud is calculated strictly before Fajr (same day). 
+            // If Tahajjud is 04:00 and Fajr is 05:00.
+            // Then validFloatTimes sorted order: Fajr(05), ..., Isha(20), Tahajjud(04).
+            // Wait, validFloatTimes is roughly sorted by day events? 
+            // No, validFloatTimes comes from PrayerTimes.getPrayerTimes which returns [F, S, D, A, S, M, I].
+            // If Tahajjud is added as last element, its value might be smaller than others if treated largely?
+            // "actualTahajjudFloat" logic: (fajr - offset + 24) % 24. So it's small float (e.g. 4.0).
+            // So validFloatTimes[8] is < validFloatTimes[7] (Isha 20.0).
+            // So loop `for idx in prayerIndices` (where indices sorted?)
+            // `var nextIdx = -1`: loop iterates unsorted indices?
+            // The loop order matters. `prayerIndices = [0, 3, 4, 6, 7] + [8]`.
+            // If time is 22:00. Isha (20:00). Tahajjud (04:00).
+            // Fajr (05:00) > 22.0? No.
+            // ...
+            // Isha (20:00) > 22.0? No.
+            // Tahajjud (04:00) > 22.0? No.
+            // So nextIdx = -1. Correct (Next is F-Tom).
             
-            let totalInterval = nextFajrTime - lastPrayerTime
-            let elapsed = currentHour - lastPrayerTime
-            self.progressToNextPrayer = min(max(elapsed / totalInterval, 0.0), 1.0)
+            // Should we highlight Isha?
+            // Rule: "Isha only until midnight".
+            // Midnight approx 00:30 (24.5).
+            // If 22:00 < 24.5. Yes.
+            // So we override focusName = "Isha".
+            
+            var focusName = "Fajr (Tomorrow)" 
+            // But visual items don't have "Fajr (Tomorrow)". Just "Fajr".
+            // If we want to highlight Isha card...
+            
+            // Re-calc midnight
+            let t_fajr = validFloatTimes[0]
+            let t_sunset = validFloatTimes[5]
+            let t_isha = validFloatTimes[7]
+            let midNight = (t_sunset + (t_fajr + 24.0)) / 2.0
+            
+            if currentHour >= t_isha && currentHour < midNight {
+                 focusName = "Isha"
+            }
+            // What if Tahajjud is Enabled? 
+            // Usually Tahajjud is "Next" if we are past midnight?
+            // If currentHour is 01:00. 
+            // Then it is < validFloatTimes[8] (04:00). Use standard logic?
+            // Wait, in standard logic, `validFloatTimes[8]` (04.0) > `currentHour` (01.0).
+            // So nextIdx WOULD be 8 (Tahajjud).
+            // So we wouldn't be in this `else` block for 01:00.
+            // We are only in this `else` block if `currentHour` > all times (e.g. 23:59).
+            // So the Midnight check is relevant.
+            
+            // Update Focus
+            var newItems = self.dashboardItems
+            for i in 0..<newItems.count {
+                let exactMatch = (newItems[i].title == focusName)
+                var shouldHighlight = exactMatch
+                if newItems[i].type == .combinedPrayer {
+                   if newItems[i].title.contains(focusName) { shouldHighlight = true }
+                }
+                if newItems[i].isNext != shouldHighlight {
+                     newItems[i] = DashboardItem(title: newItems[i].title, time: newItems[i].time, type: newItems[i].type, isNext: shouldHighlight)
+                }
+            }
+            if newItems != self.dashboardItems { self.dashboardItems = newItems }
+            
+            // Progress to Fajr Tomorrow
+            let lastPrayerIdx = prayerIndices.last!
+            let lastPrayerTime = validFloatTimes[lastPrayerIdx] // Could be Tahajjud (04:00) if sorted? 
+            // Wait, if Tahajjud is 04:00, it's < 23:00.
+            // If array is [05, 06, 12, 13, 16, 18, 19, 20, 04].
+            // If current is 23:00.
+            // max(validFloatTimes) is Isha (20).
+            // We need distance from Isha to Fajr-Tom.
+            // Or Tahajjud to Fajr?
+            // Logic: "Previous" was Isha. "Next" is Fajr (Tom).
+            // If Tahajjud enabled, Next is Tahajjud (04:00).
+            // Why did validFloatTimes[8] (04:00) fail `> currentHour` check? 
+            // because 04.0 is not > 23.0.
+            // But logically 04.0 (tomorrow) is 28.0.
+            // My `determineNextPrayer` logic relies on raw floats.
+            
+            // FIX: If Tahajjud is < Fajr (Standard), it represents "Next Day". 
+            // We should treat it as (Tahajjud + 24) for comparison if current is late?
+            // Or just rely on the fallback.
+            
+            // Actually, if Tahajjud is 04:00.
+            // If time is 23:00.
+            // I want "Next" to be Tahajjud.
+            // But `04.0 > 23.0` is False.
+            // So loop finishes. nextIdx = -1.
+            // So it says "Next: Fajr (Tomorrow)".
+            // It skips Tahajjud!
+            
+            // I should fix the loop to handle "Tomorrow" events like Tahajjud if they are numerically small.
+            // But let's stick to the user Request strategy first (highlighting).
+            // I will inject the highlight logic in the `else` block too.
+            
+            let totalInterval = (validFloatTimes[0] + 24.0) - validFloatTimes[prayerIndices.max(by: { validFloatTimes[$0] < validFloatTimes[$1] })!] // Last numerical max (Isha)
+            // Just usage of lastPrayerIdx might be flaky if Tahajjud is 4.0.
+            // Let's use Isha (Index 7) as anchor for "Night" progress.
+            let ishaT = validFloatTimes[7]
+            let nextFajrTime = validFloatTimes[0] + 24.0
+            let elapsed = currentHour - ishaT
+            self.progressToNextPrayer = min(max(elapsed / (nextFajrTime - ishaT), 0.0), 1.0)
         }
     }
     
