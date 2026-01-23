@@ -225,7 +225,7 @@ class DashboardViewModel: ObservableObject {
             return
         }
         
-        // Clear all pending because we are about to rebuild the schedule for Today + Future
+        // Clear all pending before rebuilding
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         LogManager.shared.log("Dashboard: Cleared pending notifications.")
         
@@ -237,11 +237,24 @@ class DashboardViewModel: ObservableObject {
         let calendar = Calendar.current
         let now = Date()
         
-        // Loop for Today (0) and Tomorrow (1)
-        for dayOffset in 0...1 {
-            guard let targetDate = calendar.date(byAdding: .day, value: dayOffset, to: now) else { continue }
+        // Scheduling Metrics
+        var scheduledCount = 0
+        let MAX_NOTIFICATIONS = 60 // iOS Limit is 64. Keeping buffer.
+        var dayOffset = 0
+        
+        LogManager.shared.log("Dashboard: Starting scheduling loop (Max: \(MAX_NOTIFICATIONS))...")
+        
+        // Loop until we hit the notification limit
+        schedulingLoop: while scheduledCount < MAX_NOTIFICATIONS {
+            // Safety: Stop if we look too far ahead (e.g. 1 month) to prevent infinite loops
+            if dayOffset > 30 { break }
             
-            // --- Calculation Logic (Mirrors calculatePrayerTimes) ---
+            guard let targetDate = calendar.date(byAdding: .day, value: dayOffset, to: now) else {
+                dayOffset += 1
+                continue
+            }
+            
+            // --- Calculation Logic ---
             let pt = PrayerTimes()
             if let method = PrayerTimes.CalculationMethod(rawValue: startCalcMethod) { pt.setCalcMethod(method) }
             pt.setAsrMethod(asrForHanafi ? .hanafi : .shafii)
@@ -261,50 +274,81 @@ class DashboardViewModel: ObservableObject {
                 day: calendar.component(.day, from: targetDate)
             ) - pt.lng / (15 * 24)
             
-            pt.computeMidDay(t: 12.0/24.0) // Internal state update
+            pt.computeMidDay(t: 12.0/24.0)
             pt.setDhuhrMinutes(10.0)
             
-            // Raw Floats: [Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib, Isha]
             let floatTimes = pt.getPrayerTimes(date: targetDate, latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude)
-            guard !floatTimes.isEmpty else { continue }
+            if floatTimes.isEmpty {
+                dayOffset += 1
+                continue
+            }
             
             var validFloats = floatTimes.compactMap { Double($0) }
             
             // Apply Offsets
-            // Indices: 0=Fajr, 5=Maghrib, 6=Isha
             validFloats[0] = (validFloats[0] + fajrOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             validFloats[5] = (validFloats[5] + maghribOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             validFloats[6] = (validFloats[6] + ishaOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             
-            // Prepare list of prayers to schedule
-            // Indices: 0=Fajr, 1=Sunrise, 2=Dhuhr, 3=Asr, 4=Sunset, 5=Maghrib, 6=Isha
-            // Names array must match this indexing for basic prayers
             let basicNames = ["Fajr", "Sunrise", "Dhuhr", "Asr", "Sunset", "Maghrib", "Isha"]
             
-            // Tahajjud Calculation
+            // Tahajjud
             var tahajjudTime: Double? = nil
             if tahajjudEnabled {
-                // (Fajr - Offset)
                 tahajjudTime = (validFloats[0] - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             }
             
-            // Iterate and Schedule
+            // Process Basic Prayers
             for (idx, name) in basicNames.enumerated() {
-                // Skip events
                 if name == "Sunrise" || name == "Sunset" { continue }
                 
                 let floatTime = validFloats[idx]
-                scheduleSinglePrayer(name: name, floatTime: floatTime, baseDate: targetDate, calendar: calendar, checkDate: now)
+                
+                // Determine Cost & Check Limit
+                let adhanFile = getAdhanFile(for: name)
+                var cost = 1
+                if adhanFile == "adhan_fajr" { cost = 10 }
+                else if adhanFile == "adhan_regular" { cost = 6 }
+                
+                // Check if we have space
+                if scheduledCount + cost > MAX_NOTIFICATIONS {
+                    LogManager.shared.log("Dashboard: limit reached (\(scheduledCount)). Stopping.")
+                    break schedulingLoop
+                }
+                
+                // Try Schedule
+                if scheduleSinglePrayer(name: name, floatTime: floatTime, baseDate: targetDate, calendar: calendar, checkDate: now) {
+                     scheduledCount += cost
+                }
             }
             
-            // Schedule Tahajjud if enabled
+            // Process Tahajjud
             if let tTime = tahajjudTime {
-                scheduleSinglePrayer(name: "Tahajjud", floatTime: tTime, baseDate: targetDate, calendar: calendar, checkDate: now)
+                 let tName = "Tahajjud"
+                 let adhanFile = getAdhanFile(for: tName)
+                 var cost = 1
+                 if adhanFile == "adhan_fajr" { cost = 10 } // Unlikely for Tahajjud but possible
+                 else if adhanFile == "adhan_regular" { cost = 6 }
+                 
+                 if scheduledCount + cost <= MAX_NOTIFICATIONS {
+                      if scheduleSinglePrayer(name: tName, floatTime: tTime, baseDate: targetDate, calendar: calendar, checkDate: now) {
+                          scheduledCount += cost
+                      }
+                 } else {
+                      LogManager.shared.log("Dashboard: limit reached at Tahajjud. Stopping.")
+                      break schedulingLoop
+                 }
             }
+            
+            // Move to next day
+            dayOffset += 1
         }
+        
+        LogManager.shared.log("Dashboard: Scheduling complete. Total slots used: ~\(scheduledCount)")
     }
     
-    private func scheduleSinglePrayer(name: String, floatTime: Double, baseDate: Date, calendar: Calendar, checkDate: Date) {
+    // Returns true if actually scheduled
+    private func scheduleSinglePrayer(name: String, floatTime: Double, baseDate: Date, calendar: Calendar, checkDate: Date) -> Bool {
         let hour = Int(floatTime)
         let minute = Int((floatTime - Double(hour)) * 60)
         let second = Int(((floatTime * 60) - floor(floatTime * 60)) * 60)
@@ -332,8 +376,10 @@ class DashboardViewModel: ObservableObject {
                         soundName: adhanFile
                     )
                 }
+                return true
             }
         }
+        return false
     }
     
     func calculatePrayerTimes(location: LocationManager) {
