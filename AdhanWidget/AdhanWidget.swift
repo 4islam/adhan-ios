@@ -30,11 +30,49 @@ struct Provider: TimelineProvider {
     
     private func loadData() -> AdhanEntry {
         if let data = SharedDataManager.shared.getPrayerData() {
+            // Filter out Sunrise, Sunset, and Solar Noon
+            let excluded = ["Sunrise", "Sunset", "Solar Noon"]
+            var filteredNames: [String] = []
+            var filteredTimes: [String] = []
+            
+            // Logic to preserve correct "Next Prayer" index across filtering
+            var originalNextName = ""
+            if data.nextIndex < data.names.count {
+                originalNextName = data.names[data.nextIndex]
+            }
+            
+            // If the *actual* next event is Sunrise/Sunset, skip forward to the next Adhan
+            var checkIndex = data.nextIndex
+            while checkIndex < data.names.count && excluded.contains(data.names[checkIndex]) {
+                checkIndex += 1
+            }
+            // Wrap or clamp? Usually list is circular daily. If we run off end (after Isha), it wraps to Fajr (index 0).
+            if checkIndex < data.names.count {
+                originalNextName = data.names[checkIndex]
+            } else {
+                // If we went past end, it means next is Fajr (which is never excluded)
+                originalNextName = "Fajr"
+            }
+            
+            // Build Filtered Lists
+            for (index, name) in data.names.enumerated() {
+                if !excluded.contains(name) {
+                    filteredNames.append(name)
+                    // Safe index check
+                    if index < data.times.count {
+                        filteredTimes.append(data.times[index])
+                    }
+                }
+            }
+            
+            // Find new index of the target "Next Prayer"
+            let newNextIndex = filteredNames.firstIndex(of: originalNextName) ?? 0
+            
             return AdhanEntry(
                 date: Date(),
-                prayerNames: data.names,
-                prayerTimes: data.times,
-                nextIndex: data.nextIndex,
+                prayerNames: filteredNames,
+                prayerTimes: filteredTimes,
+                nextIndex: newNextIndex,
                 location: data.location,
                 hijriDate: data.hijri
             )

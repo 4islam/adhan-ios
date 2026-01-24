@@ -15,6 +15,10 @@ struct SettingsView: View {
                     Label("Sounds & Audio", systemImage: "speaker.wave.2.fill")
                 }
                 
+                NavigationLink(destination: NotificationSettingsView()) {
+                    Label("Notification Toggles", systemImage: "bell.badge.fill")
+                }
+                
                 NavigationLink(destination: FeatureSettingsView()) {
                     Label("Tahajjud & Features", systemImage: "moon.stars.fill")
                 }

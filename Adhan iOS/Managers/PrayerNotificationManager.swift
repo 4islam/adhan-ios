@@ -190,6 +190,17 @@ class PrayerNotificationManager: NSObject {
             
             if let prayerDate = Calendar.current.date(from: components) {
                 let name = names[idx]
+                
+                // Check if notification is enabled for this specific prayer
+                let enabledKey = "notification_enabled_\(name)"
+                // Default to true if key missing
+                let isEnabled = defaults.object(forKey: enabledKey) as? Bool ?? true
+                
+                if !isEnabled {
+                    LogManager.shared.log("PrayerManager: Skipping \(name) - Notification Disabled by user.")
+                    continue
+                }
+                
                 let prefKey = "adhan_\(name.lowercased())"
                 let soundName = defaults.string(forKey: prefKey) ?? "adhan_regular"
                 
