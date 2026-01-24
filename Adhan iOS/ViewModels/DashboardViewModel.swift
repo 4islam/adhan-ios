@@ -91,6 +91,7 @@ class DashboardViewModel: ObservableObject {
         startTimer()
         updateVerse()
         checkPermissions()
+        startLocationTimeout()
     }
     
     func checkPermissions() {
@@ -118,6 +119,21 @@ class DashboardViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+    }
+    
+    private func startLocationTimeout() {
+        // Fallback if location takes too long (e.g. older devices)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 12.0) { [weak self] in
+            guard let self = self else { return }
+            if self.isLoading && (self.locationName == "Locating..." || self.lastCalculatedFloats.isEmpty) {
+                print("DashboardViewModel: Location timed out. Using Default (Mecca).")
+                self.loadingStatus = "Location Timeout. Using Default."
+                
+                // Construct a default location (Mecca)
+                let defaultLoc = CLLocation(latitude: 21.4225, longitude: 39.8262)
+                LocationManager.shared.setManualLocation(defaultLoc)
+            }
+        }
     }
 
     
@@ -914,10 +930,14 @@ class DashboardViewModel: ObservableObject {
     }
     
     func formatRemaining(_ diff: Double) -> String {
-        let hourStr = Int(diff)
-        let minStr = Int((diff - Double(hourStr)) * 60)
-        // Removed seconds to conserve battery/simplify UI
-        return String(format: "%02d:%02d", hourStr, minStr)
+        let hours = Int(diff)
+        let minutes = Int((diff - Double(hours)) * 60)
+        
+        if hours > 0 {
+            return String(format: "%d hr %02d m", hours, minutes)
+        } else {
+            return String(format: "%d m", minutes)
+        }
     }
     
     private func getAdhanFile(for prayerName: String) -> String {

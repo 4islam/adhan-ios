@@ -10,7 +10,75 @@ class ManualTests {
         log("--- STARTING TESTS ---")
         testPrayerTimesFormat()
         testFridayVerseLogic()
+        testNotificationIdsUnique()
+        testAppGroupAccess()
+        testResolveSoundPath()
         log("--- ALL TESTS COMPLETED ---")
+    }
+    
+    private func testNotificationIdsUnique() {
+        log("Test: Notification ID Uniqueness")
+        let manager = PrayerNotificationManager.shared
+        let now = Date()
+        let tomorrow = now.addingTimeInterval(86400)
+        
+        // Same prayer, same chunk, different day
+        let id1 = manager.makeNotificationId(prayer: "Fajr", chunk: 1, date: now)
+        let id2 = manager.makeNotificationId(prayer: "Fajr", chunk: 1, date: tomorrow)
+        
+        if id1 != id2 {
+            log("✅ PASSED: IDs are unique across dates.")
+        } else {
+            log("❌ FAILED: IDs are identical for different dates! (\(id1))")
+        }
+        
+        // Sanity check format
+        if id1.contains("chain") && id1.contains("_") {
+             log("✅ PASSED: ID format contains expected keywords.")
+        } else {
+             log("❌ FAILED: ID format unexpected: \(id1)")
+        }
+    }
+    
+    private func testAppGroupAccess() {
+        log("Test: App Group Access")
+        let suite = "group.adhan.ntrust.ai"
+        if let ud = UserDefaults(suiteName: suite) {
+            ud.set("test_value", forKey: "test_key")
+            if ud.string(forKey: "test_key") == "test_value" {
+                log("✅ PASSED: App Group UserDefaults is active.")
+            } else {
+                log("❌ FAILED: App Group initialized but failed to save/read.")
+            }
+        } else {
+            log("❌ FAILED: Could not initialize UserDefaults with suite '\(suite)'. Check Entitlements/Provisioning.")
+        }
+    }
+    
+    private func testResolveSoundPath() {
+        log("Test: Sound Path Resolution")
+        let manager = PrayerNotificationManager.shared
+        
+        // 1. Test Known File (1r is known to be in AudioSegments)
+        let result = manager.resolveSoundPath(for: "1r")
+        
+        if let _ = result.absoluteUrl {
+            if result.relativePath == "AudioSegments/1r.caf" {
+                log("✅ PASSED: Correctly resolved '1r' to 'AudioSegments/1r.caf'")
+            } else {
+                log("❌ FAILED: Resolved path was '\(result.relativePath)', expected 'AudioSegments/1r.caf'")
+            }
+        } else {
+            log("❌ FAILED: Could not find '1r.caf' in bundle.")
+        }
+        
+        // 2. Test Missing File
+        let missing = manager.resolveSoundPath(for: "non_existent_file")
+        if missing.absoluteUrl == nil {
+            log("✅ PASSED: Correctly returned nil for missing file.")
+        } else {
+            log("❌ FAILED: Found non-existent file?")
+        }
     }
     
     private func testPrayerTimesFormat() {

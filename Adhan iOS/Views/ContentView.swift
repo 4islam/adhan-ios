@@ -210,6 +210,8 @@ struct ContentView: View {
                     Text(viewModel.timeRemaining)
                         .font(.system(size: 36, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
                 }
             }
             .padding(.top, 20)

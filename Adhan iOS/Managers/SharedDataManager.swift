@@ -14,7 +14,16 @@ struct SharedDataKeys {
 class SharedDataManager {
     static let shared = SharedDataManager()
     
-    private let defaults = UserDefaults(suiteName: SharedDataKeys.suiteName)
+    private let defaults: UserDefaults?
+    
+    private init() {
+        if let shared = UserDefaults(suiteName: SharedDataKeys.suiteName) {
+            self.defaults = shared
+        } else {
+            print("⚠️ SharedDataManager: App Group '\(SharedDataKeys.suiteName)' not available. Falling back to standard UserDefaults. Widget sync will NOT work.")
+            self.defaults = UserDefaults.standard
+        }
+    }
     
     func savePrayerData(times: [String], names: [String], nextIndex: Int, location: String, hijri: String) {
         defaults?.set(times, forKey: SharedDataKeys.prayerTimes)

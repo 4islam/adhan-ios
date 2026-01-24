@@ -42,24 +42,19 @@ class PrayerNotificationManager: NSObject {
             var chunkDuration: TimeInterval = 29.0 // Fallback
             
             // Resolve File and Duration
-            // Note: We check both Root and Subdirectories just in case
-            var fileUrl: URL? = Bundle.main.url(forResource: fileNameBase, withExtension: "caf")
-            if fileUrl == nil {
-                 fileUrl = Bundle.main.url(forResource: fileNameBase, withExtension: "caf", subdirectory: "AudioSegments")
-            }
-            // Also check Resources/AudioSegments wrapper if needed (Bundle structure varies)
+            let resolution = resolveSoundPath(for: fileNameBase)
+            let fileUrl = resolution.absoluteUrl
+            let finalSoundName = resolution.relativePath
             
             if let foundUrl = fileUrl {
                 // Calculate Duration for Chaining
                 chunkDuration = getAudioDuration(url: foundUrl)
-                if i == 1 { LogManager.shared.log("PrayerManager: Found \(soundName), duration: \(String(format: "%.2f", chunkDuration))s") }
+                if i == 1 { LogManager.shared.log("PrayerManager: Found \(soundName), using path: \(finalSoundName), duration: \(String(format: "%.2f", chunkDuration))s") }
             } else {
-                LogManager.shared.log("PrayerManager: ❌ MISSING FILE: \(soundName)")
+                LogManager.shared.log("PrayerManager: ❌ MISSING FILE: \(soundName) (Path checked: \(finalSoundName))")
             }
             
-            // Safety Cap: iOS Notification limit is 30s. 
-            // If we chain based on >30s, the next notification will start late relative to silence.
-            // But user said files are < 29s.
+            // ...
             
             let triggerDate = startTime.addingTimeInterval(currentOffset)
             
@@ -67,12 +62,8 @@ class PrayerNotificationManager: NSObject {
             content.title = prayerName
             content.body = (i == 1) ? "Time for \(prayerName)" : "Adhan is playing..."
             
-            // Critical: soundName must allow iOS to find it. 
-            // If it's in a folder reference "AudioSegments", we might need "AudioSegments/1r.mp3" if added as folder ref.
-            // But if added as group, it's just "1r.mp3".
-            // We'll assume Group (flat) or Flattened Bundle Resource.
-            // If previous adhans worked, they were likely flat.
-            content.sound = UNNotificationSound(named: UNNotificationSoundName(soundName))
+            // Critical: soundName must allow iOS to find it.
+            content.sound = UNNotificationSound(named: UNNotificationSoundName(finalSoundName))
             
             content.categoryIdentifier = "PRAYER_CHAIN"
             content.threadIdentifier = "prayer_chain_\(prayerName)"
@@ -85,7 +76,7 @@ class PrayerNotificationManager: NSObject {
             let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: triggerDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
             
-            let requestID = "\(prayerName)_chain_\(i)"
+            let requestID = makeNotificationId(prayer: prayerName, chunk: i, date: triggerDate)
             let request = UNNotificationRequest(identifier: requestID, content: content, trigger: trigger)
             
             UNUserNotificationCenter.current().add(request) { error in
@@ -221,5 +212,28 @@ class PrayerNotificationManager: NSObject {
                 }
             }
         }
+    }
+    
+    // MARK: - Helpers (Testable)
+    
+    internal func makeNotificationId(prayer: String, chunk: Int, date: Date) -> String {
+        return "\(prayer)_chain_\(chunk)_\(Int(date.timeIntervalSince1970))"
+    }
+    
+    internal func resolveSoundPath(for baseName: String, extension ext: String = "caf") -> (absoluteUrl: URL?, relativePath: String) {
+        let soundName = "\(baseName).\(ext)"
+        
+        // 1. Try Root
+        if let url = Bundle.main.url(forResource: baseName, withExtension: ext) {
+            return (url, soundName)
+        }
+        
+        // 2. Try AudioSegments subdirectory
+        if let url = Bundle.main.url(forResource: baseName, withExtension: ext, subdirectory: "AudioSegments") {
+            return (url, "AudioSegments/" + soundName)
+        }
+        
+        // 3. Not Found
+        return (nil, soundName)
     }
 }

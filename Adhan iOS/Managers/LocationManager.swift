@@ -33,8 +33,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             manager.showsBackgroundLocationIndicator = false
             
             // Significant Location Change is most battery efficient
-            // Significant Location Change is most battery efficient
             manager.startMonitoringSignificantLocationChanges()
+            
+            // Force an initial high-accuracy fix for fast startup
+            // This is critical for older devices that might not have a cached location
+            manager.requestLocation()
+            
             // NB: Heading is NOT started by default to save battery
         }
     }
@@ -85,6 +89,11 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("Location manager failed: \(error.localizedDescription)")
+        // CLError.locationUnknown is common when requesting location immediately; it usually resolves on next try.
+        if let clError = error as? CLError, clError.code == .locationUnknown {
+            print("LocationManager: Temporary location unknown (retrying internally).")
+        } else {
+            print("LocationManager: Failed with fatal error: \(error.localizedDescription)")
+        }
     }
 }
