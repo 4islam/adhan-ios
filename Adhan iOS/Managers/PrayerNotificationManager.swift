@@ -68,10 +68,19 @@ class PrayerNotificationManager: NSObject {
             content.categoryIdentifier = "PRAYER_CHAIN"
             content.threadIdentifier = "prayer_chain_\(prayerName)"
             content.userInfo = [
-                "ADHAN_FILE": soundName,
                 "PRAYER_NAME": prayerName
             ]
-            content.interruptionLevel = .timeSensitive
+            
+            // Time Sensitive Entitlement Check
+            // Ideally this requires "com.apple.developer.usernotifications.time-sensitive" entitlement.
+            // On Free Tier, this might be ignored or cause silent delivery if entitlement is missing.
+            // User can toggle this in settings.
+            let isTimeSensitive = UserDefaults.standard.bool(forKey: "time_sensitive_\(prayerName)")
+            if isTimeSensitive {
+                if #available(iOS 15.0, *) {
+                    content.interruptionLevel = .timeSensitive
+                }
+            }
             
             let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: triggerDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
@@ -232,19 +241,34 @@ class PrayerNotificationManager: NSObject {
     }
     
     internal func resolveSoundPath(for baseName: String, extension ext: String = "caf") -> (absoluteUrl: URL?, relativePath: String) {
-        let soundName = "\(baseName).\(ext)"
+        let rootSoundName = "\(baseName).\(ext)"
+        LogManager.shared.log("DebugAudio: Resolving \(rootSoundName)...")
         
-        // 1. Try Root
+        let fileManager = FileManager.default
+        var foundUrl: URL? = nil
+        let finalRelativePath = rootSoundName // Always use simple name now (Library/Sounds)
+        
+        // 1. Check Library/Sounds (Priority)
+        if let libraryUrl = fileManager.urls(for: .libraryDirectory, in: .userDomainMask).first {
+            let soundUrl = libraryUrl.appendingPathComponent("Sounds").appendingPathComponent(rootSoundName)
+            if fileManager.fileExists(atPath: soundUrl.path) {
+                foundUrl = soundUrl
+                LogManager.shared.log("DebugAudio: Found in Library/Sounds: \(soundUrl.path)")
+                return (foundUrl, finalRelativePath)
+            }
+        }
+        
+        // 2. Fallback: Bundle Loopup (if verify fails)
         if let url = Bundle.main.url(forResource: baseName, withExtension: ext) {
-            return (url, soundName)
+             foundUrl = url
+             LogManager.shared.log("DebugAudio: Found in Bundle (Fallback): \(url.path)")
+        } else if let url = Bundle.main.url(forResource: baseName, withExtension: ext, subdirectory: "AudioSegments") {
+             foundUrl = url
+             LogManager.shared.log("DebugAudio: Found in Bundle Subdir (Fallback): \(url.path)")
+        } else {
+             LogManager.shared.log("DebugAudio: ❌ FILE NOT FOUND anywhere for \(rootSoundName)")
         }
         
-        // 2. Try AudioSegments subdirectory
-        if let url = Bundle.main.url(forResource: baseName, withExtension: ext, subdirectory: "AudioSegments") {
-            return (url, "AudioSegments/" + soundName)
-        }
-        
-        // 3. Not Found
-        return (nil, soundName)
+        return (foundUrl, finalRelativePath)
     }
 }

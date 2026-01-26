@@ -14,6 +14,58 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     override init() {
         super.init()
         setupRouteMonitoring()
+        prepareAudioFiles()
+    }
+    
+    /// Copies audio files from Bundle to Library/Sounds for reliable UNNotificationSound access
+    func prepareAudioFiles() {
+        let fileManager = FileManager.default
+        
+        // 1. Get Library/Sounds directory
+        guard let libraryUrl = fileManager.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+        let soundsUrl = libraryUrl.appendingPathComponent("Sounds")
+        
+        // 2. Create directory if needed
+        do {
+            try fileManager.createDirectory(at: soundsUrl, withIntermediateDirectories: true)
+        } catch {
+            print("AudioManager: Failed to create Sounds directory: \(error)")
+            return
+        }
+        
+        // 3. Define all files we need
+        var emptyNames: [String] = []
+        for i in 1...6 { emptyNames.append("\(i)r") }
+        for i in 1...10 { emptyNames.append("\(i)f") }
+        
+        // 4. Copy each file
+        for name in emptyNames {
+            let fileName = "\(name).caf"
+            let destinationUrl = soundsUrl.appendingPathComponent(fileName)
+            
+            // Skip if already exists (optimization)
+            // Note: If you ever update audio files, you might need to force overwrite logic here.
+            if fileManager.fileExists(atPath: destinationUrl.path) {
+                continue
+            }
+            
+            // Find in Bundle (trying root then subdir)
+            var sourceUrl: URL? = Bundle.main.url(forResource: name, withExtension: "caf")
+            if sourceUrl == nil {
+                sourceUrl = Bundle.main.url(forResource: name, withExtension: "caf", subdirectory: "AudioSegments")
+            }
+            
+            if let src = sourceUrl {
+                do {
+                    try fileManager.copyItem(at: src, to: destinationUrl)
+                    print("AudioManager: Copied \(fileName) to Library/Sounds")
+                } catch {
+                    print("AudioManager: Failed to copy \(fileName): \(error)")
+                }
+            } else {
+                print("AudioManager: Warning - Could not find \(fileName) in Bundle")
+            }
+        }
     }
     
     private func setupRouteMonitoring() {

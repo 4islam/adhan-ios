@@ -76,6 +76,7 @@ struct SettingsView: View {
 struct TestingView: View {
     @Binding var showingTestAlert: Bool
     @EnvironmentObject var viewModel: DashboardViewModel
+    @State private var testStatus: String = ""
     
     var body: some View {
         Form {
@@ -83,8 +84,15 @@ struct TestingView: View {
                 Button("Play Adhan (3 min)") {
                     AudioManager.shared.playAdhan(fileName: "adhan_regular")
                 }
-                Button("Play Chunk 1") {
-                    AudioManager.shared.playAdhan(fileName: "1r.caf")
+                Button("Play Chunk 1 (Test Path)") {
+                    let result = PrayerNotificationManager.shared.resolveSoundPath(for: "1r")
+                    if let url = result.absoluteUrl {
+                        AudioManager.shared.playAdhan(fileName: "1r.caf") 
+                        // Note: AudioManager re-resolves, but at least we confirmed URL exists first.
+                        // Ideally we pass URL directly to AudioManager, but its API expects String.
+                    } else {
+                        LogManager.shared.log("TEST FAILURE: Could not resolve 1r.caf path.")
+                    }
                 }
                 Button("Stop Audio") {
                     AudioManager.shared.stop()
@@ -114,10 +122,28 @@ struct TestingView: View {
                 }.foregroundColor(.red)
                 
                 Button("Run Unit Tests") {
+                    testStatus = "Running..."
                     LogManager.shared.log("Running Manual Tests...")
-                    ManualTests.shared.log = { LogManager.shared.log($0) }
-                    ManualTests.shared.runAllTests()
+                    ManualTests.shared.log = { message in 
+                        LogManager.shared.log(message)
+                        DispatchQueue.main.async {
+                            // Keep status short - show last important line
+                            if message.contains("✅") || message.contains("❌") || message.contains("COMPLETED") {
+                                testStatus = message
+                            }
+                        }
+                    }
+                    // Run slightly async to allow UI update
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        ManualTests.shared.runAllTests()
+                    }
                 }.foregroundColor(.blue)
+                
+                if !testStatus.isEmpty {
+                    Text(testStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .navigationTitle("Testing Tools")
