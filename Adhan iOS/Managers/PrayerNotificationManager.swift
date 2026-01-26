@@ -210,6 +210,17 @@ class PrayerNotificationManager: NSObject {
                     continue
                 }
                 
+                // Check if notification is enabled for this specific day of the week
+                let daysKey = "notification_days_\(name)"
+                let allowedDaysString = defaults.string(forKey: daysKey) ?? "1,2,3,4,5,6,7"
+                let allowedDays = allowedDaysString.split(separator: ",").compactMap { Int($0) }
+                let weekday = Calendar.current.component(.weekday, from: prayerDate)
+                
+                if !allowedDays.contains(weekday) {
+                    LogManager.shared.log("PrayerManager: Skipping \(name) - Disabled for weekday \(weekday). Allowed: [\(allowedDaysString)]")
+                    continue
+                }
+                
                 let prefKey = "adhan_\(name.lowercased())"
                 let soundName = defaults.string(forKey: prefKey) ?? "adhan_regular"
                 
