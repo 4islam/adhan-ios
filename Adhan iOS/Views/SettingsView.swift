@@ -50,6 +50,10 @@ struct SettingsView: View {
                 }) {
                     Label("Siri Shortcuts", systemImage: "mic.fill")
                 }
+                
+                NavigationLink(destination: HelpView()) {
+                    Label("Help & FAQ", systemImage: "questionmark.circle.fill")
+                }
             }
             
             // MARK: - Diagnostics
