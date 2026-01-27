@@ -3,8 +3,12 @@ import SwiftUI
 struct BackgroundView: View {
     var sunPos: AstroPosition?
     var moonPos: AstroPosition?
+    var showSharpOrbs: Bool = false
+    var horizonHeight: Double = 0.65 // Default 65% down. SkyView uses 0.5
     
     @State private var animateGradient = false
+
+
     
     var body: some View {
         ZStack {
@@ -41,15 +45,71 @@ struct BackgroundView: View {
             
             // Dynamic Sun
             if let sun = sunPos, sun.altitude > -18 { // Down to astronomical twilight
-                CelestialOrb(color: getSunColor(alt: sun.altitude), size: 100, blur: 50)
+                CelestialOrb(color: getSunColor(alt: sun.altitude), size: 100, blur: showSharpOrbs ? 0 : 50)
                     .position(mapCoordinates(alt: sun.altitude, az: sun.azimuth))
             }
+
+
             
             // Dynamic Moon
             if let moon = moonPos, moon.altitude > -10 {
-                CelestialOrb(color: .white.opacity(0.8), size: 60, blur: 30)
-                    .position(mapCoordinates(alt: moon.altitude, az: moon.azimuth))
+                // If we have phase info (0.0 - 1.0), pick SF Symbol
+                let phaseName = getMoonPhaseSymbol(phase: moon.phase ?? 0.5)
+                
+                // Equal size: 100pt (same as Sun)
+                if showSharpOrbs {
+                    // Sharp Visualization Mode
+                    
+                    // Calculate rotation to face Sun
+                    var rotationAngle: Angle = .zero
+                    if let sun = sunPos, let sunPt = getScreenPoint(alt: sun.altitude, az: sun.azimuth),
+                       let moonPt = getScreenPoint(alt: moon.altitude, az: moon.azimuth) {
+                        
+                        let deltaY = sunPt.y - moonPt.y
+                        let deltaX = sunPt.x - moonPt.x
+                        // Standard angle
+                        var angle = atan2(deltaY, deltaX) * 180 / .pi
+                        
+                        // SFSymbol "waxing" crescent default: Lit side is RIGHT.
+                        // We want RIGHT side to point to Sun.
+                        // atan2 gives angle to Sun. 0 deg is Right.
+                        // So rotation = angle.
+                        
+                        // However, Waning crescent default: Lit side is LEFT.
+                        // We need to know if it is waxing or waning to offset.
+                        // Simplified: Just use Moon Phase to determine offset?
+                        // Or simplistic: Assume waxing-like orientation for generic "lit side" logic
+                        // But SFSymbols vary.
+                        
+                        // IMPROVEMENT: Just add a Glow and slight yellow tint vs grey.
+                        // Rotation is complex due to symbol variation.
+                        // Let's stick to GLOW and Color first as per "realistic" request.
+                         
+                         // Re-enabling basic rotation if desired, but might be wrong for Waning.
+                         // Let's just do GLOW first.
+                    }
+
+                    Image(systemName: phaseName)
+                        .resizable()
+                        .symbolRenderingMode(.palette) // Use palette if available for standard multi-color
+                        .foregroundStyle(.white.opacity(0.9), .white.opacity(0.1)) // Primary (Lit), Secondary (Dark)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 100, height: 100)
+                        
+                        // GLOW EFFECT
+                        .shadow(color: .white.opacity(0.6), radius: 15, x: 0, y: 0)
+                        
+                        .position(mapCoordinates(alt: moon.altitude, az: moon.azimuth))
+                } else {
+
+                    // Ambient Mode (App Background)
+                    CelestialOrb(color: .white.opacity(0.8), size: 100, blur: 30)
+                        .position(mapCoordinates(alt: moon.altitude, az: moon.azimuth))
+                }
             }
+
+
+
             
             // Horizon Line
             VStack {
@@ -60,17 +120,19 @@ struct BackgroundView: View {
                                        startPoint: .bottom, 
                                        endPoint: .top)
                     )
-                    .frame(height: UIScreen.main.bounds.height * 0.4)
+                    .frame(height: UIScreen.main.bounds.height * (1.0 - horizonHeight + 0.05)) // Dynamic based on horizon
                 
                 Rectangle()
+
                     .fill(Color.white.opacity(0.1))
                     .frame(height: 1)
                     .shadow(color: .white.opacity(0.2), radius: 5)
                 
                 Spacer()
-                    .frame(height: UIScreen.main.bounds.height * 0.35)
+                    .frame(height: UIScreen.main.bounds.height * (1.0 - horizonHeight))
             }
             .ignoresSafeArea()
+
         }
         .onAppear {
             animateGradient = true
@@ -79,13 +141,20 @@ struct BackgroundView: View {
     
     // Map Altitude/Azimuth to Screen Coordinates
     func mapCoordinates(alt: Double, az: Double) -> CGPoint {
+        return getScreenPoint(alt: alt, az: az) ?? CGPoint.zero
+    }
+
+    func getScreenPoint(alt: Double, az: Double) -> CGPoint? {
         let screenWidth = UIScreen.main.bounds.width
+
         let screenHeight = UIScreen.main.bounds.height
         
-        // Horizon (0 deg) is at 65% height
-        let horizonY = 0.65
+        
+        // Horizon (0 deg)
+        let horizonY = self.horizonHeight
         
         // Altitude range: we map -20 (below horizon) to 90 (zenith)
+
         // Zenith (90) -> Y = 0.1
         // Horizon (0) -> Y = horizonY (0.65)
         // Below (-20) -> Y = 0.8
@@ -107,6 +176,7 @@ struct BackgroundView: View {
         
         return CGPoint(x: x, y: y)
     }
+
     
     // Helpers for dynamic styling
     func getGlowColor(alt: Double) -> Color {
@@ -126,6 +196,24 @@ struct BackgroundView: View {
         if alt > 10 { return .yellow }
         if alt > 0 { return .orange }
         return .red
+    }
+    
+    // SF Symbol Mapping for Moon Phase
+    func getMoonPhaseSymbol(phase: Double) -> String {
+        // phase is 0.0 (New) -> 1.0 (New)
+        // SF Symbols: moonphase.new.moon, .waxing.crescent, .first.quarter, .waxing.gibbous, .full.moon, ...
+        
+        switch phase {
+        case 0.0..<0.06: return "moonphase.new.moon"
+        case 0.06..<0.24: return "moonphase.waxing.crescent"
+        case 0.24..<0.26: return "moonphase.first.quarter"
+        case 0.26..<0.44: return "moonphase.waxing.gibbous"
+        case 0.44..<0.56: return "moonphase.full.moon"
+        case 0.56..<0.74: return "moonphase.waning.gibbous"
+        case 0.74..<0.76: return "moonphase.last.quarter"
+        case 0.76..<0.94: return "moonphase.waning.crescent"
+        default: return "moonphase.new.moon"
+        }
     }
 }
 

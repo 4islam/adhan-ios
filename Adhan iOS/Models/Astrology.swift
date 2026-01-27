@@ -3,7 +3,15 @@ import Foundation
 public struct AstroPosition {
     public let altitude: Double // in degrees
     public let azimuth: Double  // in degrees
+    public let phase: Double?   // 0.0 to 1.0 (0=New, 0.5=Full) for Moon
+    
+    public init(altitude: Double, azimuth: Double, phase: Double? = nil) {
+        self.altitude = altitude
+        self.azimuth = azimuth
+        self.phase = phase
+    }
 }
+
 
 /// Simplified astronomical calculations for Sun/Moon position.
 /// Base logic for a beautiful horizon visualizer.
@@ -138,7 +146,15 @@ public class Astrology {
             azimuth = 360 - azimuth
         }
         
-        return AstroPosition(altitude: altitude, azimuth: azimuth)
+        // Calculate Phase
+        // Age of moon calc
+        // Approx cycle 29.53059 days
+        let knownNewMoon = 2451550.1 // Jan 6 2000
+        let daysSinceNew = julianDate - knownNewMoon
+        let cycles = daysSinceNew / 29.53059
+        let currentCycle = cycles - floor(cycles)
+        
+        return AstroPosition(altitude: altitude, azimuth: azimuth, phase: currentCycle)
     }
     
     /// Calculates Moonset time for a given day.

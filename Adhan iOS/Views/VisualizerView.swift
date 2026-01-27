@@ -8,9 +8,16 @@ struct VisualizerView: View {
     
     var body: some View {
         ZStack {
-            BackgroundView(sunPos: viewModel.sunPosition, moonPos: viewModel.moonPosition)
+            BackgroundView(
+                sunPos: viewModel.sunPosition, 
+                moonPos: viewModel.moonPosition, 
+                showSharpOrbs: true,
+                horizonHeight: 0.5 // Higher horizon (center screen) for better visibility
+            )
             
             VStack {
+
+
                 Text("Skylight")
                     .font(.system(.title, design: .serif))
                     .foregroundColor(.white)
@@ -33,29 +40,12 @@ struct VisualizerView: View {
                 Spacer()
                 
                 // Celestial Arc Visualization
-                ZStack {
-                    // Horizon Line
-                    Rectangle()
-                        .fill(LinearGradient(colors: [.black.opacity(0.0), .white.opacity(0.1)], startPoint: .top, endPoint: .bottom))
-                        .frame(height: 150)
-                        .offset(y: 150)
-                    
-                    Path { path in
-                        path.move(to: CGPoint(x: 0, y: 200))
-                        path.addQuadCurve(to: CGPoint(x: 350, y: 200), control: CGPoint(x: 175, y: -50))
-                    }
-                    .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [5]))
-                    .foregroundColor(.white.opacity(0.2))
-                    .frame(width: 350, height: 200)
-                    
-                    if let sun = viewModel.sunPosition {
-                        CelestialBody(icon: "sun.max.fill", color: .orange, altitude: sun.altitude, label: "Sun")
-                    }
-                    
-                    if let moon = viewModel.moonPosition {
-                        CelestialBody(icon: "moon.fill", color: .gray, altitude: moon.altitude, label: "Moon")
-                    }
-                }
+                // Celestial Arc Visualization
+                // REPLACED by BackgroundView (User Request: "Background is good enough, sun/moon should go right/left")
+                Spacer()
+                    .frame(height: 300)
+                    .allowsHitTesting(false)
+
                 .frame(height: 300)
                 
                 // Detailed Metrics
