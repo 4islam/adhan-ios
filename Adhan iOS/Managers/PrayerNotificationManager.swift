@@ -6,8 +6,9 @@ import AVFoundation
 class PrayerNotificationManager: NSObject {
     static let shared = PrayerNotificationManager()
     
-    // No fixed interval anymore. Driven by file duration.
-    // private let chainInterval: TimeInterval = 29.0 
+    // Performance Cache: Avoid re-parsing and reading hundreds of files during scheduling loops
+    private var durationCache: [String: TimeInterval] = [:]
+    private let cacheQueue = DispatchQueue(label: "ai.ntrust.adhan.durationCache")
     
     // Schedule a chain of notifications
     func scheduleAdhanChain(startTime: Date, prayerName: String, adhanType: String = "regular") {
@@ -102,9 +103,22 @@ class PrayerNotificationManager: NSObject {
     }
     
     private func getAudioDuration(url: URL) -> TimeInterval {
+        let key = url.lastPathComponent
+        
+        // Thread-safe cache lookup
+        if let cached = cacheQueue.sync(execute: { durationCache[key] }) {
+            return cached
+        }
+        
         do {
             let audioFile = try AVAudioFile(forReading: url)
             let duration = Double(audioFile.length) / audioFile.processingFormat.sampleRate
+            
+            // Thread-safe cache update
+            cacheQueue.async(flags: .barrier) {
+                self.durationCache[key] = duration
+            }
+            
             return duration
         } catch {
             LogManager.shared.log("PrayerManager: Error reading duration for \(url.lastPathComponent): \(error)")

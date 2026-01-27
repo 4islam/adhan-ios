@@ -59,6 +59,10 @@ class DashboardViewModel: ObservableObject {
     private var lastTriggeredPrayer: String? // Track to avoid double Adhan
     private var lastGeocodedLocation: CLLocation? // Optimization: Avoid re-geocoding on same loc
     
+    // Performance Cache for different dates
+    private var calculationCache: [String: CalculationResults] = [:]
+    private let cacheLock = NSLock()
+    private var navigationWorkItem: DispatchWorkItem?
 
     
     @Published var isLocationAuthorized: Bool = false
@@ -134,10 +138,14 @@ class DashboardViewModel: ObservableObject {
     
     static let hijriFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.calendar = Calendar(identifier: .islamicCivil)
-        f.dateStyle = .long
-        f.timeStyle = .none
-        f.locale = Locale(identifier: "en_US")
+        f.calendar = Calendar(identifier: .islamicUmmAlQura)
+        f.dateFormat = "d MMMM yyyy"
+        return f
+    }()
+    
+    static let cacheKeyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
         return f
     }()
     
@@ -209,15 +217,41 @@ class DashboardViewModel: ObservableObject {
         
         // Listen for Location Changes (Significant)
         LocationManager.shared.$location
-            .compactMap { $0 } // Filter nils
-            .sink { [weak self] _ in
+            .compactMap { $0 }
+            .sink { [weak self] newLocation in
+                guard let self = self else { return }
+                
+                // Debounce Logic: 500m distance or significant time has passed
+                let now = Date()
+                let timeSinceLast = self.lastCalculationDate != nil ? now.timeIntervalSince(self.lastCalculationDate!) : 9999
+                
+                if let last = self.lastGeocodedLocation {
+                    let distance = newLocation.distance(from: last)
+                    if distance < 500 && timeSinceLast < 600 { // 500m or 10 mins
+                        return
+                    }
+                }
+                
                 print("DashboardViewModel: Location updated! Recalculating schedule...")
-                self?.lastCalculationDate = nil // Force recalculation bypass logic
-                // If we are viewing a different day, we still want to recalculate for that day based on new location
-                self?.calculatePrayerTimes(location: LocationManager.shared)
-                self?.scheduleNotifications()
+                self.lastCalculationDate = nil // Force recalculation bypass logic
+                self.calculatePrayerTimes(location: LocationManager.shared)
+                
+                // Throttled notification scheduling
+                self.queueThrottledNotificationSchedule()
             }
             .store(in: &cancellables)
+    }
+    
+    private var scheduleWorkItem: DispatchWorkItem?
+    
+    private func queueThrottledNotificationSchedule() {
+        scheduleWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            self?.scheduleNotifications()
+        }
+        scheduleWorkItem = item
+        // Wait 2 seconds of stillness before rebuilding the entire 60-slot queue
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: item)
     }
     
     private func handleTimerTick() {
@@ -282,6 +316,9 @@ class DashboardViewModel: ObservableObject {
     
     func refreshSettings() {
         print("DashboardViewModel: Settings changed. Forcing recalculation...")
+        cacheLock.lock()
+        calculationCache.removeAll()
+        cacheLock.unlock()
         self.lastCalculationDate = nil // Bypass throttle
         updateTime()
     }
@@ -334,11 +371,21 @@ class DashboardViewModel: ObservableObject {
     }
     
     private func updateForSelectedDate() {
-        // Reset state that might look confusing during switch
+        // Reset state
         self.loadingStatus = "Loading..."
         self.isCalculating = true
-        // Force calculation immediately
-        calculatePrayerTimes(location: LocationManager.shared)
+        
+        // Cancel any pending calculation from rapid clicking
+        navigationWorkItem?.cancel()
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.calculatePrayerTimes(location: LocationManager.shared)
+        }
+        
+        self.navigationWorkItem = workItem
+        // 150ms delay: filters fast spamming but feels nearly instant for single clicks
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
     }
     
     func setTimeAnchor(_ anchor: TimeAnchor) {
@@ -411,9 +458,18 @@ class DashboardViewModel: ObservableObject {
             return
         }
         
-        // Clear all pending before rebuilding
+        // Move to background thread to avoid UI lag
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self else { return }
+            self.performNotificationScheduling()
+        }
+    }
+    
+    private func performNotificationScheduling() {
+        // Clear all pending before rebuilding (This is fast)
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         LogManager.shared.log("Dashboard: Cleared pending notifications.")
+
         
         guard let loc = LocationManager.shared.location else {
             LogManager.shared.log("Dashboard: Location missing, cannot calculate times for scheduling.")
@@ -425,14 +481,16 @@ class DashboardViewModel: ObservableObject {
         
         // Scheduling Metrics
         var scheduledCount = 0
-        let MAX_NOTIFICATIONS = 60 // iOS Limit is 64. Keeping buffer.
+        let MAX_NOTIFICATIONS = 60
         var dayOffset = 0
         
         LogManager.shared.log("Dashboard: Starting scheduling loop (Max: \(MAX_NOTIFICATIONS))...")
         
-        // Loop until we hit the notification limit
+        // Reuse PrayerTimes instance to avoid redundant initialization overhead
+        let pt = PrayerTimes()
+        
         schedulingLoop: while scheduledCount < MAX_NOTIFICATIONS {
-            // Safety: Stop if we look too far ahead (e.g. 1 month) to prevent infinite loops
+
             if dayOffset > 30 { break }
             
             guard let targetDate = calendar.date(byAdding: .day, value: dayOffset, to: now) else {
@@ -440,12 +498,11 @@ class DashboardViewModel: ObservableObject {
                 continue
             }
             
-            // --- Calculation Logic ---
-            let pt = PrayerTimes()
+            // --- Optimized Calculation Logic ---
             if let method = PrayerTimes.CalculationMethod(rawValue: startCalcMethod) { pt.setCalcMethod(method) }
             pt.setAsrMethod(asrForHanafi ? .hanafi : .shafii)
             if let highLat = PrayerTimes.HighLatMethod(rawValue: highLatMethod) { pt.setHighLatsMethod(highLat) }
-            pt.setTimeFormat(.float) // Critical: Ensure we get Double-compatible strings or raw floats if method supports it
+            pt.setTimeFormat(.float)
             
             pt.lat = loc.coordinate.latitude
             pt.lng = loc.coordinate.longitude
@@ -464,60 +521,45 @@ class DashboardViewModel: ObservableObject {
             pt.computeMidDay(t: 12.0/24.0)
             pt.setDhuhrMinutes(10.0)
             
-            // Raw Floats: [Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib, Isha]
             var validFloats = pt.getPrayerTimesDoubles(date: targetDate, latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude)
             
-            // Safety Check: Ensure we have enough data (Expect: Fajr, Sunrise, Dhuhr, Asr, Sunset, Maghrib, Isha = 7)
             if validFloats.count < 7 {
-                LogManager.shared.log("Dashboard: Warning! Insufficient prayer times calculated for dayOffset \(dayOffset). Count: \(validFloats.count). Skipping.")
                 dayOffset += 1
                 continue
             }
             
-            // Apply Offsets
-            // Indices: 0=Fajr, 5=Maghrib, 6=Isha
             validFloats[0] = (validFloats[0] + fajrOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             validFloats[5] = (validFloats[5] + maghribOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             validFloats[6] = (validFloats[6] + ishaOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             
             let basicNames = ["Fajr", "Sunrise", "Dhuhr", "Asr", "Sunset", "Maghrib", "Isha"]
-            
-            // Tahajjud
             var tahajjudTime: Double? = nil
             if tahajjudEnabled {
                 tahajjudTime = (validFloats[0] - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             }
             
-            // Process Basic Prayers
             for (idx, name) in basicNames.enumerated() {
                 if name == "Sunrise" || name == "Sunset" { continue }
-                
                 let floatTime = validFloats[idx]
-                
-                // Determine Cost & Check Limit
                 let adhanFile = getAdhanFile(for: name)
                 var cost = 1
                 if adhanFile == "adhan_fajr" { cost = 10 }
                 else if adhanFile == "adhan_regular" { cost = 6 }
                 
-                // Check if we have space
                 if scheduledCount + cost > MAX_NOTIFICATIONS {
-                    LogManager.shared.log("Dashboard: limit reached (\(scheduledCount)). Stopping.")
                     break schedulingLoop
                 }
                 
-                // Try Schedule
                 if scheduleSinglePrayer(name: name, floatTime: floatTime, baseDate: targetDate, calendar: calendar, checkDate: now) {
                      scheduledCount += cost
                 }
             }
             
-            // Process Tahajjud
             if let tTime = tahajjudTime {
                  let tName = "Tahajjud"
                  let adhanFile = getAdhanFile(for: tName)
                  var cost = 1
-                 if adhanFile == "adhan_fajr" { cost = 10 } // Unlikely for Tahajjud but possible
+                 if adhanFile == "adhan_fajr" { cost = 10 }
                  else if adhanFile == "adhan_regular" { cost = 6 }
                  
                  if scheduledCount + cost <= MAX_NOTIFICATIONS {
@@ -525,17 +567,15 @@ class DashboardViewModel: ObservableObject {
                           scheduledCount += cost
                       }
                  } else {
-                      LogManager.shared.log("Dashboard: limit reached at Tahajjud. Stopping.")
                       break schedulingLoop
                  }
             }
-            
-            // Move to next day
             dayOffset += 1
         }
         
         LogManager.shared.log("Dashboard: Scheduling complete. Total slots used: ~\(scheduledCount)")
     }
+
     
     // Returns true if actually scheduled
     private func scheduleSinglePrayer(name: String, floatTime: Double, baseDate: Date, calendar: Calendar, checkDate: Date) -> Bool {
@@ -581,12 +621,57 @@ class DashboardViewModel: ObservableObject {
             return
         }
         
-        self.loadingStatus = "Calculating Schedule..."
-        // Don't set isCalculating = true here blindly if we are already in async, 
-        // but it's safe to ensure it.
-        // If called from updateForSelectedDate, it's already true.
+        // Safety Debounce: Don't recalculate if location changed very little (e.g. GPS jitter)
+        // unless it's been a long time (1 hour from updateTime() or 10 mins here)
+        if let lastLoc = self.lastGeocodedLocation {
+            let distance = loc.distance(from: lastLoc)
+            let timeSinceLast = Date().timeIntervalSince(self.lastCalculationDate ?? Date.distantPast)
+            
+            // If we are viewing 'today' and moved < 500m and calculated < 10 mins ago, skip
+            if self.isToday && distance < 500 && timeSinceLast < 600 {
+                self.isCalculating = false
+                return
+            }
+        }
         
-        let date = selectedDate // Use selectedDate for calculation
+        let date = selectedDate
+        let dateKey = DashboardViewModel.cacheKeyFormatter.string(from: date)
+        
+        // Check cache first
+        cacheLock.lock()
+        let cached = calculationCache[dateKey]
+        cacheLock.unlock()
+        
+        if let results = cached {
+            LogManager.shared.log("[Perf] Cache hit for \(dateKey)")
+            // Simulate inputs for applyResults
+            let inputs = CalculationInputs(
+                startCalcMethod: self.startCalcMethod,
+                asrForHanafi: self.asrForHanafi,
+                highLatMethod: self.highLatMethod,
+                timeFormat: self.timeFormat,
+                tahajjudOffset: self.tahajjudOffset,
+                fajrOffset: self.fajrOffset,
+                maghribOffset: self.maghribOffset,
+                ishaOffset: self.ishaOffset,
+                combineShortNightEnabled: self.combineShortNightEnabled,
+                shortNightDuration: self.shortNightDuration,
+                combineThreshold: self.combineThreshold,
+                asrMaghribGapThreshold: self.asrMaghribGapThreshold,
+                isCombinedDhuhrAsr: self.isCombinedDhuhrAsr,
+                isCombinedMaghribIsha: self.isCombinedMaghribIsha,
+                tahajjudEnabled: self.tahajjudEnabled,
+                nextPrayerName: self.nextPrayerName,
+                isToday: self.isToday,
+                dashboardItems: self.dashboardItems
+            )
+            self.applyResults(results, inputs: inputs, startTime: CFAbsoluteTimeGetCurrent(), loc: loc)
+            return
+        }
+        
+        self.isCalculating = true
+        self.loadingStatus = "Calculating Schedule..."
+        // Use local constant for thread safety below
         
         // Capture all necessary values for background thread
         let startCalcMethod = self.startCalcMethod
@@ -702,89 +787,86 @@ class DashboardViewModel: ObservableObject {
         let startTime = CFAbsoluteTimeGetCurrent()
         let pt = PrayerTimes()
 
+        // Extract components once
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        let year = components.year ?? 2000
+        let month = components.month ?? 1
+        let day = components.day ?? 1
             
-            // Apply Settings
         // Apply Settings
         if let method = PrayerTimes.CalculationMethod(rawValue: inputs.startCalcMethod) {
+            pt.setCalcMethod(method)
+        }
+        
+        pt.setAsrMethod(asrForHanafi ? .hanafi : .shafii)
+        if let highLat = PrayerTimes.HighLatMethod(rawValue: highLatMethod) {
+            pt.setHighLatsMethod(highLat)
+        }
+        
+        let originalFormat = PrayerTimes.TimeFormat(rawValue: timeFormat) ?? .time12
+        pt.setTimeFormat(.float) // Use float for internal processing
+            
+        // 1. Solar Noon (Zawal)
+        pt.lat = loc.coordinate.latitude
+        pt.lng = loc.coordinate.longitude
+        pt.timeZone = pt.effectiveTimeZone(year: year, month: month, day: day, timeZone: nil)
+        pt.jDate = pt.julianDate(year: year, month: month, day: day) - pt.lng / (15 * 24)
+        
+        let zawalFloat = pt.computeMidDay(t: 12.0/24.0) + (pt.timeZone - pt.lng / 15.0)
+        let solarNoonStr = pt.floatToTimeFormat(zawalFloat, format: originalFormat)
+        
+        // 2. Main Calculation (Optimized: Get Doubles directly)
+        pt.setDhuhrMinutes(10.0) 
+        let adjustedFloatTimes = pt.getPrayerTimesDoubles(date: date, latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude)
+        
+        if adjustedFloatTimes.count < 7 { return }
+            
+        // 4. Tahajjud (minutes before Fajr)
+        let actualTahajjudFloat = (adjustedFloatTimes[0] - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+        
+        // 5. Combining Logic
+        var fajrFloatVal = adjustedFloatTimes[0]
+        let dhuhrFloat = adjustedFloatTimes[2]
+        let asrFloat = adjustedFloatTimes[3]
+        var maghribFloatVal = adjustedFloatTimes[5]
+        var ishaFloatVal = adjustedFloatTimes[6]
+        
+        // Apply Manual Offsets (minutes to hours)
+        fajrFloatVal = (fajrFloatVal + fajrOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+        maghribFloatVal = (maghribFloatVal + maghribOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+        ishaFloatVal = (ishaFloatVal + ishaOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+        
+        // Update with adjusted offsets
+        var offsetAdjusted = adjustedFloatTimes
+        offsetAdjusted[0] = fajrFloatVal
+        offsetAdjusted[5] = maghribFloatVal
+        offsetAdjusted[6] = ishaFloatVal
+        
+        var isShortNight = false
+        if combineShortNightEnabled {
+             let nightDuration = (24.0 - ishaFloatVal) + fajrFloatVal 
+             if nightDuration < shortNightDuration {
+                 isShortNight = true
+             }
+        }
+        
+        let asrMaghribGap = (maghribFloatVal - asrFloat) * 60.0
+        let newIsCombinedDhuhrAsr = ((asrFloat - dhuhrFloat) * 60.0 <= combineThreshold) || (asrMaghribGap <= asrMaghribGapThreshold)
+        let newIsCombinedMaghribIsha = isShortNight || ((ishaFloatVal - maghribFloatVal) * 60.0 <= combineThreshold)
 
-                pt.setCalcMethod(method)
-            }
-            
-            pt.setAsrMethod(asrForHanafi ? .hanafi : .shafii)
-            if let highLat = PrayerTimes.HighLatMethod(rawValue: highLatMethod) {
-                pt.setHighLatsMethod(highLat)
-            }
-            
-            let originalFormat = PrayerTimes.TimeFormat(rawValue: timeFormat) ?? .time12
-            pt.setTimeFormat(.float) // Use float for internal processing
-            
-            // 1. Solar Noon (Zawal)
-            pt.lat = loc.coordinate.latitude
-            pt.lng = loc.coordinate.longitude
-            pt.timeZone = pt.effectiveTimeZone(year: Calendar.current.component(.year, from: date), 
-                                               month: Calendar.current.component(.month, from: date), 
-                                               day: Calendar.current.component(.day, from: date), 
-                                               timeZone: nil)
-            pt.jDate = pt.julianDate(year: Calendar.current.component(.year, from: date), 
-                                    month: Calendar.current.component(.month, from: date), 
-                                    day: Calendar.current.component(.day, from: date)) - pt.lng / (15 * 24)
-            
-            let zawalFloat = pt.computeMidDay(t: 12.0/24.0) + (pt.timeZone - pt.lng / 15.0)
-            let solarNoonStr = pt.floatToTimeFormat(zawalFloat, format: originalFormat)
-            
-            // 2. Dhuhr must be 10 mins after Solar Noon
-            pt.setDhuhrMinutes(10.0) // This adds 10 mins to mid-day in adjustTimes
-            
-            // 3. Main Calculation
-            let floatTimes = pt.getPrayerTimes(date: date, latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude)
-            let validFloatTimes = floatTimes.compactMap { Double($0) }
-            
-            // 4. Tahajjud (minutes before Fajr)
-            let actualTahajjudFloat = (validFloatTimes[0] - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
-            
-            // 5. Combining Logic
-            var fajrFloatVal = validFloatTimes[0]
-            let dhuhrFloat = validFloatTimes[2]
-            let asrFloat = validFloatTimes[3]
-            var maghribFloatVal = validFloatTimes[5]
-            var ishaFloatVal = validFloatTimes[6]
-            
-            // Apply Manual Offsets (minutes to hours)
-            fajrFloatVal = (fajrFloatVal + fajrOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
-            maghribFloatVal = (maghribFloatVal + maghribOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
-            ishaFloatVal = (ishaFloatVal + ishaOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
-            
-            // Update validFloatTimes with adjusted values
-            var adjustedFloatTimes = validFloatTimes
-            adjustedFloatTimes[0] = fajrFloatVal
-            adjustedFloatTimes[5] = maghribFloatVal
-            adjustedFloatTimes[6] = ishaFloatVal
-            
-            var isShortNight = false
-            if combineShortNightEnabled {
-                 let nightDuration = (24.0 - ishaFloatVal) + fajrFloatVal 
-                 if nightDuration < shortNightDuration {
-                     isShortNight = true
-                 }
-            }
-            
-            let asrMaghribGap = (maghribFloatVal - asrFloat) * 60.0
-            let newIsCombinedDhuhrAsr = ((asrFloat - dhuhrFloat) * 60.0 <= combineThreshold) || (asrMaghribGap <= asrMaghribGapThreshold)
-            let newIsCombinedMaghribIsha = isShortNight || ((ishaFloatVal - maghribFloatVal) * 60.0 <= combineThreshold)
-            
-            let calcTime = CFAbsoluteTimeGetCurrent()
             
             // 6. Format Strings for individual display
             pt.setTimeFormat(originalFormat)
-            let finalPrayerTimes = pt.adjustTimesFormat(adjustedFloatTimes)
+            let finalPrayerTimes = pt.adjustTimesFormat(offsetAdjusted)
             
             let sunRiseStr = finalPrayerTimes[1]
             let sunSetStr = finalPrayerTimes[4]
             
             // 7. Names and Tahajjud
             var names = ["Fajr", "Sunrise", "Solar Noon", "Dhuhr", "Asr", "Sunset", "Maghrib", "Isha"]
-            let weekday = Calendar.current.component(.weekday, from: date)
-            if weekday == 6 {
+            let wDayResult = calendar.component(.weekday, from: date)
+            if wDayResult == 6 {
                 names[3] = "Jummah (or Dhuhr)"
             }
             
@@ -792,8 +874,8 @@ class DashboardViewModel: ObservableObject {
             finalTimesWithNoon.insert(solarNoonStr, at: 2)
             
             // Midnight calculation
-            let fNext = adjustedFloatTimes[0] + 24.0
-            let sSet = adjustedFloatTimes[4] // Sunset
+            let fNext = offsetAdjusted[0] + 24.0
+            let sSet = offsetAdjusted[4] // Sunset
             let midFloat = (sSet + fNext) / 2.0
             let midnightStr = pt.floatToTimeFormat(midFloat.truncatingRemainder(dividingBy: 24.0), format: originalFormat)
 
@@ -803,11 +885,12 @@ class DashboardViewModel: ObservableObject {
              }
              
             // Build consistent compareTimes and prayerDates
-            var compareTimes: [Double] = adjustedFloatTimes
+            var compareTimes: [Double] = offsetAdjusted
             compareTimes.insert(zawalFloat, at: 2)
             if tahajjudEnabled {
                 compareTimes.append(actualTahajjudFloat)
             }
+
             
             var prayerByteDates: [Date] = []
             for f in compareTimes {
@@ -851,8 +934,11 @@ class DashboardViewModel: ObservableObject {
                 i += 1
             }
 
-            let moonRiseStr = "--:--"
-            let moonSetStr = "--:--"
+            let mRise = Astrology.getMoonrise(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
+            let mSet = Astrology.getMoonset(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
+            
+            let moonRiseStr = mRise != nil ? pt.floatToTimeFormat(Double(calendar.component(.hour, from: mRise!)) + Double(calendar.component(.minute, from: mRise!)) / 60.0, format: originalFormat) : "--:--"
+            let moonSetStr = mSet != nil ? pt.floatToTimeFormat(Double(calendar.component(.hour, from: mSet!)) + Double(calendar.component(.minute, from: mSet!)) / 60.0, format: originalFormat) : "--:--"
             let sunPos = Astrology.getSunPosition(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
             let curDateStr = DashboardViewModel.dateFormatter.string(from: date)
             let hijriStr = DashboardViewModel.hijriFormatter.string(from: date)
@@ -887,10 +973,19 @@ class DashboardViewModel: ObservableObject {
          let mainStart = CFAbsoluteTimeGetCurrent()
          let now = Date()
          
+         // Store in cache if not already there (only if it matches the requested date)
+         let dateKey = DashboardViewModel.cacheKeyFormatter.string(from: results.date)
+         
+         cacheLock.lock()
+         calculationCache[dateKey] = results
+         cacheLock.unlock()
+
          if self.selectedDate != results.date {
-             LogManager.shared.log("[Perf] Dropped stale update for \(results.currentDateString). Current: \(self.currentDateString)")
+             LogManager.shared.log("[Perf] Handled update for \(results.currentDateString). UI is viewing different date: \(self.currentDateString)")
+             self.isCalculating = false
              return
          }
+
          
          self.solarNoon = results.solarNoon
          self.sunRise = results.sunRise
@@ -910,10 +1005,12 @@ class DashboardViewModel: ObservableObject {
          
          self.currentDateString = results.currentDateString
          self.hijriDateString = results.hijriDateString
-         
-         // Restore Smart Selection & Focus Logic
          self.lastCalculatedFloats = results.compareTimes
-         self.lastCalculationDate = results.date
+         self.lastCalculationDate = results.date // Keep track for 1-hour periodic refresh
+          if results.date.timeIntervalSince(Date()) < 86400 && results.date.timeIntervalSince(Date()) > -86400 {
+              // It's effectively today, use this as our anchor for location debouncing
+              self.lastCalculationDate = Date() 
+          }
          
          if inputs.isToday {
              self.determineNextPrayer(validFloatTimes: results.compareTimes, date: now)
@@ -925,16 +1022,20 @@ class DashboardViewModel: ObservableObject {
          }
          
          self.reverseGeocode(loc)
+         self.lastGeocodedLocation = loc
+
          
-         // Shared Data
-         DispatchQueue.global(qos: .background).async {
-             SharedDataManager.shared.savePrayerData(
-                 times: self.prayerTimes,
-                 names: self.prayerNames,
-                 nextIndex: self.nextPrayerIndex,
-                 location: self.locationName,
-                 hijri: self.hijriDateString
-             )
+         // Shared Data - ONLY update for Today's date to avoid widget stale data & preference spam
+         if inputs.isToday {
+             DispatchQueue.global(qos: .background).async {
+                 SharedDataManager.shared.savePrayerData(
+                     times: self.prayerTimes,
+                     names: self.prayerNames,
+                     nextIndex: self.nextPrayerIndex,
+                     location: self.locationName,
+                     hijri: self.hijriDateString
+                 )
+             }
          }
          
          self.isCalculating = false

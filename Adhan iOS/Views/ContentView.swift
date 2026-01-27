@@ -96,20 +96,6 @@ struct ContentView: View {
                     
                     audioOverlay
                     
-                    if viewModel.isCalculating {
-                        ZStack {
-                            Color.black.opacity(0.5).ignoresSafeArea()
-                            VStack(spacing: 16) {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(1.5)
-                                Text("Calculating...")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
-                        }
-                        .transition(.opacity)
-                    }
                 }
                 
 
@@ -124,13 +110,6 @@ struct ContentView: View {
         .environmentObject(viewModel)
         .onAppear {
             viewModel.calculatePrayerTimes(location: locationManager)
-        }
-        .onChange(of: locationManager.location) {
-            viewModel.calculatePrayerTimes(location: locationManager)
-            viewModel.scheduleNotifications() 
-        }
-        .onChange(of: viewModel.prayerTimes) {
-            viewModel.scheduleNotifications()
         }
     }
     
@@ -199,6 +178,7 @@ struct ContentView: View {
                 onPrev: { viewModel.goToPreviousDay() },
                 onJump: { date in viewModel.jumpToDate(date) },
                 isToday: viewModel.isToday,
+                isCalculating: viewModel.isCalculating,
                 onReturnToToday: { viewModel.jumpToDate(Date()) }
             )
             

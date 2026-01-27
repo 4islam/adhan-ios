@@ -33,6 +33,7 @@ struct VisualizerView: View {
                     onPrev: { viewModel.goToPreviousDay() },
                     onJump: { date in viewModel.jumpToDate(date) },
                     isToday: viewModel.isToday,
+                    isCalculating: viewModel.isCalculating,
                     onReturnToToday: { viewModel.jumpToDate(Date()) }
                 )
                 .padding(.bottom, 10)

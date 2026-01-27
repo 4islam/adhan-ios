@@ -26,6 +26,16 @@ class SharedDataManager {
     }
     
     func savePrayerData(times: [String], names: [String], nextIndex: Int, location: String, hijri: String) {
+        // Optimization: Only write if data changed to avoid flooding OS preference logs
+        if let existing = getPrayerData(),
+           existing.times == times,
+           existing.names == names,
+           existing.nextIndex == nextIndex,
+           existing.location == location,
+           existing.hijri == hijri {
+            return
+        }
+        
         defaults?.set(times, forKey: SharedDataKeys.prayerTimes)
         defaults?.set(names, forKey: SharedDataKeys.prayerNames)
         defaults?.set(nextIndex, forKey: SharedDataKeys.nextPrayerIndex)

@@ -13,6 +13,7 @@ struct DateControlView: View {
     var onPrev: () -> Void
     var onJump: (Date) -> Void
     var isToday: Bool
+    var isCalculating: Bool
     var onReturnToToday: () -> Void
     
     var body: some View {
@@ -39,6 +40,13 @@ struct DateControlView: View {
                         Text(hijriString)
                             .font(.system(.caption, design: .serif))
                             .foregroundColor(.cyan.opacity(0.8))
+                        
+                        if isCalculating {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .tint(.white)
+                                .transition(.opacity)
+                        }
                     }
                 }
                 .sheet(isPresented: $showCalendar) {
