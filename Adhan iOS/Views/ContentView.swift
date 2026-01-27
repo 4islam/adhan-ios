@@ -95,6 +95,21 @@ struct ContentView: View {
                     bottomDock
                     
                     audioOverlay
+                    
+                    if viewModel.isCalculating {
+                        ZStack {
+                            Color.black.opacity(0.5).ignoresSafeArea()
+                            VStack(spacing: 16) {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(1.5)
+                                Text("Calculating...")
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        }
+                        .transition(.opacity)
+                    }
                 }
             }
             // ZStack End
@@ -173,54 +188,17 @@ struct ContentView: View {
     
     private var heroSection: some View {
         VStack(spacing: 8) {
-            HStack {
-                Button(action: {
-                    withAnimation {
-                        viewModel.goToPreviousDay()
-                    }
-                }) {
-                    Image(systemName: "chevron.left.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.white.opacity(0.6))
-                }
-                
-                Button(action: {
-                    showCalendar = true
-                }) {
-                    VStack(spacing: 4) {
-                        Text(viewModel.currentDateString)
-                            .font(.system(.title3, design: .serif))
-                            .foregroundColor(.white.opacity(0.8))
-                        
-                        Text(viewModel.hijriDateString)
-                            .font(.system(.caption, design: .serif))
-                            .foregroundColor(.cyan.opacity(0.8))
-                    }
-                }
-                .sheet(isPresented: $showCalendar) {
-                    VStack {
-                        DatePicker("Select Date", selection: $viewModel.selectedDate, displayedComponents: .date)
-                            .datePickerStyle(.graphical)
-                            .padding()
-                            .onChange(of: viewModel.selectedDate) {
-                                viewModel.jumpToDate(viewModel.selectedDate)
-                                showCalendar = false
-                            }
-                    }
-                    .presentationDetents([.medium])
-                }
-                
-                Button(action: {
-                    withAnimation {
-                        viewModel.goToNextDay()
-                    }
-                }) {
-                    Image(systemName: "chevron.right.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.white.opacity(0.6))
-                }
-            }
-            .padding(.top, 10)
+            DateControlView(
+                dateString: viewModel.currentDateString,
+                hijriString: viewModel.hijriDateString,
+                showCalendar: $showCalendar,
+                selectedDate: $viewModel.selectedDate,
+                onNext: { viewModel.goToNextDay() },
+                onPrev: { viewModel.goToPreviousDay() },
+                onJump: { date in viewModel.jumpToDate(date) },
+                isToday: viewModel.isToday,
+                onReturnToToday: { viewModel.jumpToDate(Date()) }
+            )
             
             Text(viewModel.locationName)
                 .font(.system(.caption, design: .rounded))
@@ -260,24 +238,6 @@ struct ContentView: View {
                     }
                 }
                 .padding(.top, 20)
-            } else {
-                // Return to Today Button
-                Button(action: {
-                    withAnimation {
-                        viewModel.jumpToDate(Date())
-                    }
-                }) {
-                    Text("Return to Today")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.9))
-                        .cornerRadius(20)
-                }
-                .padding(.top, 30)
-                .padding(.bottom, 20)
             }
         }
     }
