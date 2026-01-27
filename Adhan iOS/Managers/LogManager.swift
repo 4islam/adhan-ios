@@ -25,28 +25,47 @@ class LogManager: ObservableObject {
     @Published var logs: [LogEntry] = []
     
     private let storageKey = "ApplicationLogs"
-    private let suiteName = "group.adhan.ntrust.ai"
     
     private init() {
         loadLogs()
     }
     
     private var defaults: UserDefaults {
-        return UserDefaults(suiteName: suiteName) ?? .standard
+        return .standard
     }
+    
+    private var saveWorkItem: DispatchWorkItem?
     
     func log(_ message: String) {
         let entry = LogEntry(message: message)
         DispatchQueue.main.async {
             self.logs.insert(entry, at: 0) // Newest first
-            self.saveLogs()
+            
+            // Cap to 500 logs to avoid bloating Preferences
+            if self.logs.count > 500 {
+                self.logs = Array(self.logs.prefix(500))
+            }
+            
+            self.queueSave()
         }
         print("LOG: \(message)") // Also print to console
     }
     
     func clearLogs() {
         logs.removeAll()
-        saveLogs()
+        queueSave()
+    }
+    
+    private func queueSave() {
+        saveWorkItem?.cancel()
+        
+        let item = DispatchWorkItem { [weak self] in
+            self?.saveLogs()
+        }
+        
+        saveWorkItem = item
+        // Wait 1 second of stillness before writing logs to disk
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: item)
     }
     
     private func saveLogs() {

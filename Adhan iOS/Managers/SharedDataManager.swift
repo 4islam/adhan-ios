@@ -25,14 +25,19 @@ class SharedDataManager {
         }
     }
     
+    // Explicitly check for changes before letting OS trigger a sync
+    private func hasChanged(times: [String], names: [String], nextIndex: Int, location: String, hijri: String) -> Bool {
+        guard let existing = getPrayerData() else { return true }
+        return existing.times != times ||
+               existing.names != names ||
+               existing.nextIndex != nextIndex ||
+               existing.location != location ||
+               existing.hijri != hijri
+    }
+    
     func savePrayerData(times: [String], names: [String], nextIndex: Int, location: String, hijri: String) {
         // Optimization: Only write if data changed to avoid flooding OS preference logs
-        if let existing = getPrayerData(),
-           existing.times == times,
-           existing.names == names,
-           existing.nextIndex == nextIndex,
-           existing.location == location,
-           existing.hijri == hijri {
+        if !hasChanged(times: times, names: names, nextIndex: nextIndex, location: location, hijri: hijri) {
             return
         }
         

@@ -674,6 +674,7 @@ class DashboardViewModel: ObservableObject {
         // Use local constant for thread safety below
         
         // Capture all necessary values for background thread
+        let locForGeocode = loc // Use local copy to check if we need geocode
         let startCalcMethod = self.startCalcMethod
         let asrForHanafi = self.asrForHanafi
         let highLatMethod = self.highLatMethod
@@ -1014,19 +1015,12 @@ class DashboardViewModel: ObservableObject {
          
          if inputs.isToday {
              self.determineNextPrayer(validFloatTimes: results.compareTimes, date: now)
-         } else {
-             self.nextPrayerIndex = -1
-             self.nextPrayerName = ""
-             self.timeRemaining = ""
-             self.progressToNextPrayer = 0.0
-         }
-         
-         self.reverseGeocode(loc)
-         self.lastGeocodedLocation = loc
+             
+             // Geo-coding: Only if location moved > 1km (handled inside reverseGeocode)
+             self.reverseGeocode(loc)
+             self.lastGeocodedLocation = loc
 
-         
-         // Shared Data - ONLY update for Today's date to avoid widget stale data & preference spam
-         if inputs.isToday {
+             // Shared Data - ONLY update for Today's date to avoid widget stale data & preference spam
              DispatchQueue.global(qos: .background).async {
                  SharedDataManager.shared.savePrayerData(
                      times: self.prayerTimes,
@@ -1036,6 +1030,12 @@ class DashboardViewModel: ObservableObject {
                      hijri: self.hijriDateString
                  )
              }
+         } else {
+             // For past/future dates, clear today-specific UI anchors
+             self.nextPrayerIndex = -1
+             self.nextPrayerName = ""
+             self.timeRemaining = ""
+             self.progressToNextPrayer = 0.0
          }
          
          self.isCalculating = false
