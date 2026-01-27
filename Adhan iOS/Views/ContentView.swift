@@ -8,6 +8,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) var scenePhase
     
     @State private var isListExpanded = false
+    @State private var showCalendar = false
     
     var body: some View {
         NavigationStack {
@@ -60,7 +61,7 @@ struct ContentView: View {
                                     }
                                 }
                                 
-                                Spacer().frame(height: 120) // Space for bottom dock
+                                Spacer().frame(height: 250) // Increased space for bottom dock + Astro Panel
                             }
                         }
                         .scrollIndicators(.hidden)
@@ -75,6 +76,8 @@ struct ContentView: View {
                             }
                         }
                     }
+                    
+                    
                     
                     VStack {
                         Spacer()
@@ -170,13 +173,54 @@ struct ContentView: View {
     
     private var heroSection: some View {
         VStack(spacing: 8) {
-            Text(viewModel.currentDateString)
-                .font(.system(.title3, design: .serif))
-                .foregroundColor(.white.opacity(0.8))
-            
-            Text(viewModel.hijriDateString)
-                .font(.system(.caption, design: .serif))
-                .foregroundColor(.cyan.opacity(0.8))
+            HStack {
+                Button(action: {
+                    withAnimation {
+                        viewModel.goToPreviousDay()
+                    }
+                }) {
+                    Image(systemName: "chevron.left.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                
+                Button(action: {
+                    showCalendar = true
+                }) {
+                    VStack(spacing: 4) {
+                        Text(viewModel.currentDateString)
+                            .font(.system(.title3, design: .serif))
+                            .foregroundColor(.white.opacity(0.8))
+                        
+                        Text(viewModel.hijriDateString)
+                            .font(.system(.caption, design: .serif))
+                            .foregroundColor(.cyan.opacity(0.8))
+                    }
+                }
+                .sheet(isPresented: $showCalendar) {
+                    VStack {
+                        DatePicker("Select Date", selection: $viewModel.selectedDate, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                            .padding()
+                            .onChange(of: viewModel.selectedDate) {
+                                viewModel.jumpToDate(viewModel.selectedDate)
+                                showCalendar = false
+                            }
+                    }
+                    .presentationDetents([.medium])
+                }
+                
+                Button(action: {
+                    withAnimation {
+                        viewModel.goToNextDay()
+                    }
+                }) {
+                    Image(systemName: "chevron.right.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.white.opacity(0.6))
+                }
+            }
+            .padding(.top, 10)
             
             Text(viewModel.locationName)
                 .font(.system(.caption, design: .rounded))
@@ -187,34 +231,54 @@ struct ContentView: View {
                 .cornerRadius(20)
             
             // Hero Countdown
-            ZStack {
-                Circle()
-                    .stroke(lineWidth: 4)
-                    .foregroundColor(.white.opacity(0.1))
-                    .frame(width: 220, height: 220)
-                
-                Circle()
-                    .trim(from: 0, to: viewModel.progressToNextPrayer)
-                    .stroke(style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                    .foregroundColor(.cyan)
-                    .frame(width: 220, height: 220)
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: .cyan.opacity(0.5), radius: 10)
-                
-                VStack {
-                    Text(viewModel.nextPrayerName)
-                        .font(.title2)
-                        .fontWeight(.light)
-                        .foregroundColor(.white.opacity(0.9))
+            if viewModel.isToday {
+                ZStack {
+                    Circle()
+                        .stroke(lineWidth: 4)
+                        .foregroundColor(.white.opacity(0.1))
+                        .frame(width: 220, height: 220)
                     
-                    Text(viewModel.timeRemaining)
-                        .font(.system(size: 36, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .minimumScaleFactor(0.5)
-                        .lineLimit(1)
+                    Circle()
+                        .trim(from: 0, to: viewModel.progressToNextPrayer)
+                        .stroke(style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .foregroundColor(.cyan)
+                        .frame(width: 220, height: 220)
+                        .rotationEffect(.degrees(-90))
+                        .shadow(color: .cyan.opacity(0.5), radius: 10)
+                    
+                    VStack {
+                        Text(viewModel.nextPrayerName)
+                            .font(.title2)
+                            .fontWeight(.light)
+                            .foregroundColor(.white.opacity(0.9))
+                        
+                        Text(viewModel.timeRemaining)
+                            .font(.system(size: 36, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                    }
                 }
+                .padding(.top, 20)
+            } else {
+                // Return to Today Button
+                Button(action: {
+                    withAnimation {
+                        viewModel.jumpToDate(Date())
+                    }
+                }) {
+                    Text("Return to Today")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.9))
+                        .cornerRadius(20)
+                }
+                .padding(.top, 30)
+                .padding(.bottom, 20)
             }
-            .padding(.top, 20)
         }
     }
     

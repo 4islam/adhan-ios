@@ -43,6 +43,12 @@ class DashboardViewModel: ObservableObject {
     @Published var hijriDateString: String = ""
     @Published var locationName: String = "Locating..."
     
+    @Published var selectedDate: Date = Date()
+    
+    var isToday: Bool {
+        Calendar.current.isDateInToday(selectedDate)
+    }
+
     // Celestial Positions for Background
     @Published var sunPosition: AstroPosition?
     @Published var moonPosition: AstroPosition?
@@ -165,7 +171,9 @@ class DashboardViewModel: ObservableObject {
             .sink { [weak self] _ in
                 print("DashboardViewModel: Location updated! Recalculating schedule...")
                 self?.lastCalculationDate = nil // Force recalculation bypass logic
-                self?.updateTime() // This will call scheduleNotifications
+                // If we are viewing a different day, we still want to recalculate for that day based on new location
+                self?.calculatePrayerTimes(location: LocationManager.shared)
+                self?.scheduleNotifications()
             }
             .store(in: &cancellables)
     }
@@ -237,23 +245,57 @@ class DashboardViewModel: ObservableObject {
     }
     
     func updateTime() {
-        let date = Date()
+        // This is called every minute by the timer
+        let now = Date()
         
-        // Refresh countdown and celestial positions from cached data every minute (timer tick)
-        if !lastCalculatedFloats.isEmpty {
-            determineNextPrayer(validFloatTimes: lastCalculatedFloats, date: date)
+        // If we represent "Today", we want to update the countdowns dynamically
+        if isToday {
+            if !lastCalculatedFloats.isEmpty {
+                determineNextPrayer(validFloatTimes: lastCalculatedFloats, date: now)
+            }
         }
         
-        // Full recalculations (astronomical positions AND prayer times) 
-        // are throttled to once per hour to conserve battery, unless it's the very first run.
+        // Periodic full refresh rule:
+        // If it's been > 1 hour since last full calc, RE-RUN calc for the SELECTED DATE.
+        // This ensures astronomical positions (sun/moon) update even if viewing another day, 
+        // OR if viewing today, ensures times stay fresh.
         let oneHour: TimeInterval = 3600
-        if lastCalculationDate == nil || date.timeIntervalSince(lastCalculationDate!) >= oneHour {
+        if lastCalculationDate == nil || now.timeIntervalSince(lastCalculationDate!) >= oneHour {
             print("Performing throttled 1-hour full calculation...")
-            // We need to use the LocationManager directly as the method expects it
             calculatePrayerTimes(location: LocationManager.shared)
-            // Ensure we schedule notifications after a full recalculation
+            
+            // Only schedule notifications based on REAL TIME (today/future), 
+            // no matter what day we are viewing.
             scheduleNotifications()
         }
+    }
+    
+    // MARK: - Date Navigation
+    
+    func goToNextDay() {
+        if let next = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) {
+            selectedDate = next
+            updateForSelectedDate()
+        }
+    }
+    
+    func goToPreviousDay() {
+        if let prev = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate) {
+            selectedDate = prev
+            updateForSelectedDate()
+        }
+    }
+    
+    func jumpToDate(_ date: Date) {
+        selectedDate = date
+        updateForSelectedDate()
+    }
+    
+    private func updateForSelectedDate() {
+        // Reset state that might look confusing during switch
+        self.loadingStatus = "Loading..."
+        // Force calculation immediately
+        calculatePrayerTimes(location: LocationManager.shared)
     }
     
     func scheduleNotifications() {
@@ -434,7 +476,9 @@ class DashboardViewModel: ObservableObject {
         
         self.loadingStatus = "Calculating Schedule..."
         
-        let date = Date()
+        self.loadingStatus = "Calculating Schedule..."
+        
+        let date = selectedDate // Use selectedDate for calculation
         let pt = PrayerTimes()
         
         // Apply Settings
@@ -614,8 +658,19 @@ class DashboardViewModel: ObservableObject {
             compareTimes.append(tahajjudF)
         }
         self.lastCalculatedFloats = compareTimes
-        self.lastCalculationDate = date
-        determineNextPrayer(validFloatTimes: compareTimes, date: date)
+        self.lastCalculationDate = Date() // Mark WHEN we calculated (real time)
+        
+        // If viewing today, determine next prayer relative to NOW.
+        // If viewing other days, we might want to just reset "Next" info or show nothing.
+        if isToday {
+            determineNextPrayer(validFloatTimes: compareTimes, date: Date())
+        } else {
+            // Clear "Next" info when not today
+            self.nextPrayerIndex = -1
+            self.nextPrayerName = ""
+            self.timeRemaining = ""
+            self.progressToNextPrayer = 0.0
+        }
         
         // Update Date Strings
         let formatter = DateFormatter()
