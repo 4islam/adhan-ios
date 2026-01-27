@@ -76,7 +76,12 @@ class DashboardViewModel: ObservableObject {
     }
     @Published var timeAnchor: TimeAnchor = .none
     
+    // Debugging
+    @Published var performanceLog: String = ""
+    private var debugLogs: [String] = []
+    
     private var timer: AnyCancellable?
+
     private var cancellables = Set<AnyCancellable>()
     
     // User Settings
@@ -605,10 +610,14 @@ class DashboardViewModel: ObservableObject {
         
         // Move to Background
         DispatchQueue.global(qos: .userInitiated).async {
+            let startTime = CFAbsoluteTimeGetCurrent()
+            
             let pt = PrayerTimes()
+
             
             // Apply Settings
             if let method = PrayerTimes.CalculationMethod(rawValue: startCalcMethod) {
+
                 pt.setCalcMethod(method)
             }
             
@@ -674,7 +683,11 @@ class DashboardViewModel: ObservableObject {
             let newIsCombinedDhuhrAsr = ((asrFloat - dhuhrFloat) * 60.0 <= combineThreshold) || (asrMaghribGap <= asrMaghribGapThreshold)
             let newIsCombinedMaghribIsha = isShortNight || ((ishaFloat - maghribFloat) * 60.0 <= combineThreshold)
             
+            let calcTime = CFAbsoluteTimeGetCurrent()
+            let log1 = "Math: \(String(format: "%.1f", (calcTime - startTime) * 1000))ms"
+            
             // 6. Format Strings for individual display
+
             pt.setTimeFormat(originalFormat)
             let finalPrayerTimes = pt.adjustTimesFormat(adjustedFloatTimes)
             
@@ -753,7 +766,12 @@ class DashboardViewModel: ObservableObject {
             
             // Celestial Positions for Background
             let sunPos = Astrology.getSunPosition(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
-            let moonPos = Astrology.getMoonPosition(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
+            // Moon Position moved to Secondary Phase
+            
+            let astroTime = CFAbsoluteTimeGetCurrent()
+            let log2 = "Astro: \(String(format: "%.1f", (astroTime - calcTime) * 1000))ms"
+
+
             
             // Update Date Strings
             // Use cached static formatters - thread safe since DateFormatter in Swift/Foundation on iOS 7+ is generally thread safe for reading, 
@@ -772,9 +790,20 @@ class DashboardViewModel: ObservableObject {
             
             // Update Main Thread
             DispatchQueue.main.async { [weak self] in
+                let mainStart = CFAbsoluteTimeGetCurrent()
                 guard let self = self else { return }
                 
+                // CANCELLATION CHECK: If selectedDate has changed since we started, 
+                // abort this update to prevent UI thrashing and race conditions.
+                // We compare down to the second to avoid minor floating point diffs if any,
+                // but usually direct comparison is fine for Date.
+                if self.selectedDate != date {
+                    LogManager.shared.log("[Perf] Dropped stale update for \(curDateStr). Current: \(self.currentDateString)")
+                    return
+                }
+                
                 self.solarNoon = solarNoonStr
+
                 self.sunRise = sunRiseStr
                 self.sunSet = sunSetStr
                 self.midnightTime = midnightStr
@@ -789,12 +818,15 @@ class DashboardViewModel: ObservableObject {
                 self.moonrise = moonRiseStr
                 self.moonset = moonSetStr
                 self.sunPosition = sunPos
-                self.moonPosition = moonPos
+                // self.moonPosition updated in Phase 2
                 
                 self.currentDateString = curDateStr
                 self.hijriDateString = hijriStr
                 
+
+                
                 // 9. Determine Next Prayer using floats
+
                 var compareTimes = adjustedFloatTimes
                 compareTimes.insert(zawalFloat, at: 2)
                 if tahajjudEnabled {
@@ -870,8 +902,20 @@ class DashboardViewModel: ObservableObject {
                     }
                 }
                 
+                // LOGGING MOVED TO END
+                let uiUpdateTime = CFAbsoluteTimeGetCurrent()
+                let logTotal = "Total: \(String(format: "%.1f", (uiUpdateTime - startTime) * 1000))ms"
+                
+                // Log to App Logs
+                LogManager.shared.log("[Perf] Date Change: \(log1) | \(log2) | UI: \(String(format: "%.1f", (uiUpdateTime - mainStart) * 1000))ms | \(logTotal)")
+                
+                self.performanceLog = logTotal
+                
                 // 10. Secondary: Moon Times (Calculated afterwards to prioritize fast UI)
+
                 DispatchQueue.global(qos: .userInitiated).async {
+                    let phase2Start = CFAbsoluteTimeGetCurrent()
+                    
                     var mRise = "--:--"
                     var mSet = "--:--"
                     if let rise = Astrology.getMoonrise(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude) {
@@ -881,9 +925,15 @@ class DashboardViewModel: ObservableObject {
                         mSet = self.formatTime(set)
                     }
                     
+                    let mPos = Astrology.getMoonPosition(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
+                    
                     DispatchQueue.main.async {
                         self.moonrise = mRise
                         self.moonset = mSet
+                        self.moonPosition = mPos
+                        
+                        let phase2End = CFAbsoluteTimeGetCurrent()
+                        LogManager.shared.log("[Perf] Phase 2 (Moon): \(String(format: "%.1f", (phase2End - phase2Start) * 1000))ms")
                     }
                 }
             }

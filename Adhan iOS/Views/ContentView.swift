@@ -111,6 +111,8 @@ struct ContentView: View {
                         .transition(.opacity)
                     }
                 }
+                
+
             }
             // ZStack End
             // .navigationBarHidden(true) applied to ZStack content previously, wait.
