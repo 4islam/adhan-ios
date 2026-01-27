@@ -57,6 +57,9 @@ class DashboardViewModel: ObservableObject {
     var lastCalculatedFloats: [Double] = []
     private var lastCalculationDate: Date?
     private var lastTriggeredPrayer: String? // Track to avoid double Adhan
+    private var lastGeocodedLocation: CLLocation? // Optimization: Avoid re-geocoding on same loc
+    
+
     
     @Published var isLocationAuthorized: Bool = false
     @Published var isNotificationsAuthorized: Bool = false
@@ -119,7 +122,7 @@ class DashboardViewModel: ObservableObject {
     
     static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateStyle = .medium
+        f.dateStyle = .full 
         f.timeStyle = .none
         return f
     }()
@@ -742,14 +745,11 @@ class DashboardViewModel: ObservableObject {
             }
             
             // 8. Astrology: Moon times
+            // MOVED to secondary step to speed up primary UI render
             var moonRiseStr = "--:--"
             var moonSetStr = "--:--"
-            if let rise = Astrology.getMoonrise(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude) {
-                moonRiseStr = self.formatTime(rise)
-            }
-            if let set = Astrology.getMoonset(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude) {
-                moonSetStr = self.formatTime(set)
-            }
+            // Placeholders for now
+
             
             // Celestial Positions for Background
             let sunPos = Astrology.getSunPosition(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
@@ -849,22 +849,41 @@ class DashboardViewModel: ObservableObject {
                 
                 self.reverseGeocode(loc)
                 
-                // Shared Data
-                SharedDataManager.shared.savePrayerData(
-                    times: self.prayerTimes,
-                    names: self.prayerNames,
-                    nextIndex: self.nextPrayerIndex,
-                    location: self.locationName,
-                    hijri: self.hijriDateString
-                )
+                // Shared Data (Background)
+                DispatchQueue.global(qos: .background).async {
+                    SharedDataManager.shared.savePrayerData(
+                        times: self.prayerTimes,
+                        names: self.prayerNames,
+                        nextIndex: self.nextPrayerIndex,
+                        location: self.locationName,
+                        hijri: self.hijriDateString
+                    )
+                }
                 
                 self.isCalculating = false
                 
                 if self.isLoading {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    DispatchQueue.main.async {
                         if !self.isCalculating {
                             withAnimation { self.isLoading = false }
                         }
+                    }
+                }
+                
+                // 10. Secondary: Moon Times (Calculated afterwards to prioritize fast UI)
+                DispatchQueue.global(qos: .userInitiated).async {
+                    var mRise = "--:--"
+                    var mSet = "--:--"
+                    if let rise = Astrology.getMoonrise(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude) {
+                        mRise = self.formatTime(rise)
+                    }
+                    if let set = Astrology.getMoonset(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude) {
+                        mSet = self.formatTime(set)
+                    }
+                    
+                    DispatchQueue.main.async {
+                        self.moonrise = mRise
+                        self.moonset = mSet
                     }
                 }
             }
@@ -873,6 +892,12 @@ class DashboardViewModel: ObservableObject {
 
     
     private func reverseGeocode(_ location: CLLocation) {
+        // Optimization: Don't re-geocode if close to last location (e.g. 1km)
+        if let last = lastGeocodedLocation, last.distance(from: location) < 1000 {
+            return
+        }
+        self.lastGeocodedLocation = location
+        
         CLGeocoder().reverseGeocodeLocation(location) { placemarks, error in
             if let placemark = placemarks?.first {
                 let city = placemark.locality ?? ""
