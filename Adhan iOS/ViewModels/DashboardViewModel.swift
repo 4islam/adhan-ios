@@ -608,15 +608,104 @@ class DashboardViewModel: ObservableObject {
         let dashboardItems = self.dashboardItems
         let isToday = self.isToday
         
+        // Bundle inputs to simplify closure for compiler
+        let inputs = CalculationInputs(
+            startCalcMethod: startCalcMethod,
+            asrForHanafi: asrForHanafi,
+            highLatMethod: highLatMethod,
+            timeFormat: timeFormat,
+            tahajjudOffset: tahajjudOffset,
+            fajrOffset: fajrOffset,
+            maghribOffset: maghribOffset,
+            ishaOffset: ishaOffset,
+            combineShortNightEnabled: combineShortNightEnabled,
+            shortNightDuration: shortNightDuration,
+            combineThreshold: combineThreshold,
+            asrMaghribGapThreshold: asrMaghribGapThreshold,
+            isCombinedDhuhrAsr: isCombinedDhuhrAsr,
+            isCombinedMaghribIsha: isCombinedMaghribIsha,
+            tahajjudEnabled: tahajjudEnabled,
+            nextPrayerName: nextPrayerName,
+            isToday: isToday,
+            dashboardItems: dashboardItems
+        )
+        
         // Move to Background
-        DispatchQueue.global(qos: .userInitiated).async {
-            let startTime = CFAbsoluteTimeGetCurrent()
-            
-            let pt = PrayerTimes()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.performCalculation(inputs: inputs, date: date, loc: loc)
+        }
+    }
+
+    // struct to hold calculation inputs
+    struct CalculationInputs {
+        let startCalcMethod: Int
+        let asrForHanafi: Bool
+        let highLatMethod: Int
+        let timeFormat: Int
+        let tahajjudOffset: Double
+        let fajrOffset: Double
+        let maghribOffset: Double
+        let ishaOffset: Double
+        let combineShortNightEnabled: Bool
+        let shortNightDuration: Double
+        let combineThreshold: Double
+        let asrMaghribGapThreshold: Double
+        let isCombinedDhuhrAsr: Bool
+        let isCombinedMaghribIsha: Bool
+        let tahajjudEnabled: Bool
+        let nextPrayerName: String
+        let isToday: Bool
+        let dashboardItems: [DashboardItem]
+    }
+
+    struct CalculationResults {
+        let solarNoon: String
+        let sunRise: String
+        let sunSet: String
+        let midnightTime: String
+        let isCombinedDhuhrAsr: Bool
+        let isCombinedMaghribIsha: Bool
+        let prayerNames: [String]
+        let prayerTimes: [String] 
+        let prayerDates: [Date]   
+        let compareTimes: [Double] // NEW: Pass the pre-computed floats for determineNextPrayer
+        let dashboardItems: [DashboardItem]
+        let moonrise: String 
+        let moonset: String
+        let sunPosition: AstroPosition?
+        let currentDateString: String
+        let hijriDateString: String
+        let date: Date
+    }
+
+    private func performCalculation(inputs: CalculationInputs, date: Date, loc: CLLocation) {
+        // Unpack inputs to restore local scope
+        let startCalcMethod = inputs.startCalcMethod
+        let asrForHanafi = inputs.asrForHanafi
+        let highLatMethod = inputs.highLatMethod
+        let timeFormat = inputs.timeFormat
+        let tahajjudOffset = inputs.tahajjudOffset
+        let fajrOffset = inputs.fajrOffset
+        let maghribOffset = inputs.maghribOffset
+        let ishaOffset = inputs.ishaOffset
+        let combineShortNightEnabled = inputs.combineShortNightEnabled
+        let shortNightDuration = inputs.shortNightDuration
+        let combineThreshold = inputs.combineThreshold
+        let asrMaghribGapThreshold = inputs.asrMaghribGapThreshold
+        let isCombinedDhuhrAsr = inputs.isCombinedDhuhrAsr
+        let isCombinedMaghribIsha = inputs.isCombinedMaghribIsha
+        let tahajjudEnabled = inputs.tahajjudEnabled
+        let nextPrayerName = inputs.nextPrayerName
+        let isToday = inputs.isToday
+        let dashboardItems = inputs.dashboardItems
+
+        let startTime = CFAbsoluteTimeGetCurrent()
+        let pt = PrayerTimes()
 
             
             // Apply Settings
-            if let method = PrayerTimes.CalculationMethod(rawValue: startCalcMethod) {
+        // Apply Settings
+        if let method = PrayerTimes.CalculationMethod(rawValue: inputs.startCalcMethod) {
 
                 pt.setCalcMethod(method)
             }
@@ -651,50 +740,46 @@ class DashboardViewModel: ObservableObject {
             let validFloatTimes = floatTimes.compactMap { Double($0) }
             
             // 4. Tahajjud (minutes before Fajr)
-            _ = (validFloatTimes[0] - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+            let actualTahajjudFloat = (validFloatTimes[0] - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             
             // 5. Combining Logic
-            var fajrFloat = validFloatTimes[0]
+            var fajrFloatVal = validFloatTimes[0]
             let dhuhrFloat = validFloatTimes[2]
             let asrFloat = validFloatTimes[3]
-            var maghribFloat = validFloatTimes[5]
-            var ishaFloat = validFloatTimes[6]
+            var maghribFloatVal = validFloatTimes[5]
+            var ishaFloatVal = validFloatTimes[6]
             
             // Apply Manual Offsets (minutes to hours)
-            fajrFloat = (fajrFloat + fajrOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
-            maghribFloat = (maghribFloat + maghribOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
-            ishaFloat = (ishaFloat + ishaOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+            fajrFloatVal = (fajrFloatVal + fajrOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+            maghribFloatVal = (maghribFloatVal + maghribOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
+            ishaFloatVal = (ishaFloatVal + ishaOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
             
             // Update validFloatTimes with adjusted values
             var adjustedFloatTimes = validFloatTimes
-            adjustedFloatTimes[0] = fajrFloat
-            adjustedFloatTimes[5] = maghribFloat
-            adjustedFloatTimes[6] = ishaFloat
+            adjustedFloatTimes[0] = fajrFloatVal
+            adjustedFloatTimes[5] = maghribFloatVal
+            adjustedFloatTimes[6] = ishaFloatVal
             
             var isShortNight = false
             if combineShortNightEnabled {
-                 let nightDuration = (24.0 - ishaFloat) + fajrFloat 
+                 let nightDuration = (24.0 - ishaFloatVal) + fajrFloatVal 
                  if nightDuration < shortNightDuration {
                      isShortNight = true
                  }
             }
             
-            let asrMaghribGap = (maghribFloat - asrFloat) * 60.0
+            let asrMaghribGap = (maghribFloatVal - asrFloat) * 60.0
             let newIsCombinedDhuhrAsr = ((asrFloat - dhuhrFloat) * 60.0 <= combineThreshold) || (asrMaghribGap <= asrMaghribGapThreshold)
-            let newIsCombinedMaghribIsha = isShortNight || ((ishaFloat - maghribFloat) * 60.0 <= combineThreshold)
+            let newIsCombinedMaghribIsha = isShortNight || ((ishaFloatVal - maghribFloatVal) * 60.0 <= combineThreshold)
             
             let calcTime = CFAbsoluteTimeGetCurrent()
-            let log1 = "Math: \(String(format: "%.1f", (calcTime - startTime) * 1000))ms"
             
             // 6. Format Strings for individual display
-
             pt.setTimeFormat(originalFormat)
             let finalPrayerTimes = pt.adjustTimesFormat(adjustedFloatTimes)
             
-            // Expose astronomical times explicitly
             let sunRiseStr = finalPrayerTimes[1]
             let sunSetStr = finalPrayerTimes[4]
-            // Solar Noon is already set via zawalFloat above
             
             // 7. Names and Tahajjud
             var names = ["Fajr", "Sunrise", "Solar Noon", "Dhuhr", "Asr", "Sunset", "Maghrib", "Isha"]
@@ -706,47 +791,56 @@ class DashboardViewModel: ObservableObject {
             var finalTimesWithNoon = finalPrayerTimes
             finalTimesWithNoon.insert(solarNoonStr, at: 2)
             
-            let actualTahajjudFloat = (fajrFloat - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
-            
-            // Calculate Midnight
+            // Midnight calculation
             let fNext = adjustedFloatTimes[0] + 24.0
-            let sSet = adjustedFloatTimes[4] // Maghrib/Sunset
+            let sSet = adjustedFloatTimes[4] // Sunset
             let midFloat = (sSet + fNext) / 2.0
             let midnightStr = pt.floatToTimeFormat(midFloat.truncatingRemainder(dividingBy: 24.0), format: originalFormat)
 
+             if tahajjudEnabled {
+                 names.append("Tahajjud")
+                 finalTimesWithNoon.append(pt.floatToTimeFormat(actualTahajjudFloat, format: originalFormat))
+             }
+             
+            // Build consistent compareTimes and prayerDates
+            var compareTimes: [Double] = adjustedFloatTimes
+            compareTimes.insert(zawalFloat, at: 2)
             if tahajjudEnabled {
-                names.append("Tahajjud")
-                finalTimesWithNoon.append(pt.floatToTimeFormat(actualTahajjudFloat, format: originalFormat))
+                compareTimes.append(actualTahajjudFloat)
             }
             
-            // 8. Build Dashboard Items (Handling Combined & Events)
+            var prayerByteDates: [Date] = []
+            for f in compareTimes {
+                let h = Int(f)
+                let m = Int((f - Double(h)) * 60)
+                let s = Int(((f * 60) - floor(f * 60)) * 60)
+                if let d = Calendar.current.date(bySettingHour: h, minute: m, second: s, of: date) {
+                    prayerByteDates.append(d)
+                } else {
+                    prayerByteDates.append(date) // Fallback
+                }
+            }
+
+            // 8. Build Dashboard Items
             var newItems: [DashboardItem] = []
-            
             var i = 0
             while i < names.count {
                 let name = names[i]
                 let time = finalTimesWithNoon[i]
                 let isEvent = (name == "Sunrise" || name == "Sunset" || name == "Solar Noon")
                 
-                let isNext = (name == nextPrayerName) // Simplified check
+                // Temporary next check for rendering
+                let isNext = false 
                 
                 if name == "Dhuhr" || name == "Jummah" {
                     if newIsCombinedDhuhrAsr {
-                        let pairTitle = "\(name) & Asr"
-                        let pairTime = time
-                        let isPairNext = (name == nextPrayerName || "Asr" == nextPrayerName)
-                        newItems.append(DashboardItem(title: pairTitle, time: pairTime, type: .combinedPrayer, isNext: isPairNext))
-                        i += 2 
-                        continue
+                        newItems.append(DashboardItem(title: "\(name) & Asr", time: time, type: .combinedPrayer, isNext: isNext))
+                        i += 2; continue
                     }
                 } else if name == "Maghrib" {
                     if newIsCombinedMaghribIsha {
-                        let pairTitle = "Maghrib & Isha"
-                        let pairTime = time
-                        let isPairNext = (name == nextPrayerName || "Isha" == nextPrayerName)
-                        newItems.append(DashboardItem(title: pairTitle, time: pairTime, type: .combinedPrayer, isNext: isPairNext))
-                        i += 2 
-                        continue
+                        newItems.append(DashboardItem(title: "Maghrib & Isha", time: time, type: .combinedPrayer, isNext: isNext))
+                        i += 2; continue
                     }
                 }
                 
@@ -756,188 +850,135 @@ class DashboardViewModel: ObservableObject {
                 }
                 i += 1
             }
-            
-            // 8. Astrology: Moon times
-            // MOVED to secondary step to speed up primary UI render
-            var moonRiseStr = "--:--"
-            var moonSetStr = "--:--"
-            // Placeholders for now
 
-            
-            // Celestial Positions for Background
+            let moonRiseStr = "--:--"
+            let moonSetStr = "--:--"
             let sunPos = Astrology.getSunPosition(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
-            // Moon Position moved to Secondary Phase
-            
-            let astroTime = CFAbsoluteTimeGetCurrent()
-            let log2 = "Astro: \(String(format: "%.1f", (astroTime - calcTime) * 1000))ms"
-
-
-            
-            // Update Date Strings
-            // Use cached static formatters - thread safe since DateFormatter in Swift/Foundation on iOS 7+ is generally thread safe for reading, 
-            // but `string(from:)` is mutating on older OS? Actually DateFormatter IS thread safe on modern iOS.
-            // But to be absolutely safe across threads if we were sharing instances across parallel writes...
-            // Actually, DateFormatter is NOT thread safe on Apple platforms if mutated. 
-            // But `string(from:)` doesn't mutate.
-            // However, modifying properties is unsafe.
-            // Since we configured them once in init closure and they are let, we are safe READ-ONLY.
-            
             let curDateStr = DashboardViewModel.dateFormatter.string(from: date)
             let hijriStr = DashboardViewModel.hijriFormatter.string(from: date)
+
+            // Package results
+            let results = CalculationResults(
+                solarNoon: solarNoonStr,
+                sunRise: sunRiseStr,
+                sunSet: sunSetStr,
+                midnightTime: midnightStr,
+                isCombinedDhuhrAsr: newIsCombinedDhuhrAsr,
+                isCombinedMaghribIsha: newIsCombinedMaghribIsha,
+                prayerNames: names,
+                prayerTimes: finalTimesWithNoon, 
+                prayerDates: prayerByteDates,    
+                compareTimes: compareTimes,
+                dashboardItems: newItems,
+                moonrise: moonRiseStr,
+                moonset: moonSetStr,
+                sunPosition: sunPos,
+                currentDateString: curDateStr,
+                hijriDateString: hijriStr,
+                date: date
+            )
             
-            // Geocoding (needs to be sync or handled) - reverseGeocode is inherently async, 
-            // but we can trigger it on main later or just let it update eventually.
-            
-            // Update Main Thread
             DispatchQueue.main.async { [weak self] in
-                let mainStart = CFAbsoluteTimeGetCurrent()
-                guard let self = self else { return }
-                
-                // CANCELLATION CHECK: If selectedDate has changed since we started, 
-                // abort this update to prevent UI thrashing and race conditions.
-                // We compare down to the second to avoid minor floating point diffs if any,
-                // but usually direct comparison is fine for Date.
-                if self.selectedDate != date {
-                    LogManager.shared.log("[Perf] Dropped stale update for \(curDateStr). Current: \(self.currentDateString)")
-                    return
-                }
-                
-                self.solarNoon = solarNoonStr
-
-                self.sunRise = sunRiseStr
-                self.sunSet = sunSetStr
-                self.midnightTime = midnightStr
-                
-                self.isCombinedDhuhrAsr = newIsCombinedDhuhrAsr
-                self.isCombinedMaghribIsha = newIsCombinedMaghribIsha
-                
-                self.prayerNames = names
-                self.prayerTimes = finalTimesWithNoon
-                self.dashboardItems = newItems
-                
-                self.moonrise = moonRiseStr
-                self.moonset = moonSetStr
-                self.sunPosition = sunPos
-                // self.moonPosition updated in Phase 2
-                
-                self.currentDateString = curDateStr
-                self.hijriDateString = hijriStr
-                
-
-                
-                // 9. Determine Next Prayer using floats
-
-                var compareTimes = adjustedFloatTimes
-                compareTimes.insert(zawalFloat, at: 2)
-                if tahajjudEnabled {
-                    let tahajjudF = (fajrFloat - tahajjudOffset / 60.0 + 24.0).truncatingRemainder(dividingBy: 24.0)
-                    compareTimes.append(tahajjudF)
-                }
-                self.lastCalculatedFloats = compareTimes
-                self.lastCalculationDate = Date()
-                
-                // --- Time Anchoring Logic ---
-                // If an anchor is set, adjust the selectedDate's time to match the anchor for THIS day
-                if self.timeAnchor != .none {
-                    var targetTime: Double? = nil
-                    switch self.timeAnchor {
-                    case .sunrise: targetTime = validFloatTimes[1] // Sunrise
-                    case .solarNoon: targetTime = zawalFloat // Solar Noon
-                    case .sunset: targetTime = validFloatTimes[4] // Sunset
-                    default: break
-                    }
-                    
-                    if let t = targetTime {
-                        // Update selectedDate to this time
-                        let hour = Int(t)
-                        let minute = Int((t - Double(hour)) * 60)
-                        let second = Int(((t * 60) - floor(t * 60)) * 60)
-                        
-                        // We use the Calendar to safeguard date components
-                        if let newDate = Calendar.current.date(bySettingHour: hour, minute: minute, second: second, of: self.selectedDate) {
-                            self.selectedDate = newDate
-                            
-                            // Since date changed (time-wise), we should technically re-calc positions
-                            // because positions above were calculated with the 'start of day' or old time?
-                            // 'calculatePrayerTimes' used 'selectedDate' at start. 
-                            // If `selectedDate` had old time, Astro positions above are for OLD time.
-                            // We need to update them for NEW time.
-                            // Optimization: Just re-run lightweight astro calc here.
-                            
-                            self.sunPosition = Astrology.getSunPosition(date: newDate, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
-                            self.moonPosition = Astrology.getMoonPosition(date: newDate, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
-                        }
-                    }
-                }
-                
-                if isToday {
-                    self.determineNextPrayer(validFloatTimes: compareTimes, date: Date())
-                } else {
-                    self.nextPrayerIndex = -1
-                    self.nextPrayerName = ""
-                    self.timeRemaining = ""
-                    self.progressToNextPrayer = 0.0
-                }
-                
-                self.reverseGeocode(loc)
-                
-                // Shared Data (Background)
-                DispatchQueue.global(qos: .background).async {
-                    SharedDataManager.shared.savePrayerData(
-                        times: self.prayerTimes,
-                        names: self.prayerNames,
-                        nextIndex: self.nextPrayerIndex,
-                        location: self.locationName,
-                        hijri: self.hijriDateString
-                    )
-                }
-                
-                self.isCalculating = false
-                
-                if self.isLoading {
-                    DispatchQueue.main.async {
-                        if !self.isCalculating {
-                            withAnimation { self.isLoading = false }
-                        }
-                    }
-                }
-                
-                // LOGGING MOVED TO END
-                let uiUpdateTime = CFAbsoluteTimeGetCurrent()
-                let logTotal = "Total: \(String(format: "%.1f", (uiUpdateTime - startTime) * 1000))ms"
-                
-                // Log to App Logs
-                LogManager.shared.log("[Perf] Date Change: \(log1) | \(log2) | UI: \(String(format: "%.1f", (uiUpdateTime - mainStart) * 1000))ms | \(logTotal)")
-                
-                self.performanceLog = logTotal
-                
-                // 10. Secondary: Moon Times (Calculated afterwards to prioritize fast UI)
-
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let phase2Start = CFAbsoluteTimeGetCurrent()
-                    
-                    var mRise = "--:--"
-                    var mSet = "--:--"
-                    if let rise = Astrology.getMoonrise(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude) {
-                        mRise = self.formatTime(rise)
-                    }
-                    if let set = Astrology.getMoonset(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude) {
-                        mSet = self.formatTime(set)
-                    }
-                    
-                    let mPos = Astrology.getMoonPosition(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
-                    
-                    DispatchQueue.main.async {
-                        self.moonrise = mRise
-                        self.moonset = mSet
-                        self.moonPosition = mPos
-                        
-                        let phase2End = CFAbsoluteTimeGetCurrent()
-                        LogManager.shared.log("[Perf] Phase 2 (Moon): \(String(format: "%.1f", (phase2End - phase2Start) * 1000))ms")
-                    }
-                }
+                self?.applyResults(results, inputs: inputs, startTime: startTime, loc: loc)
             }
-        }
+        } // Close performCalculation
+    
+    private func applyResults(_ results: CalculationResults, inputs: CalculationInputs, startTime: Double, loc: CLLocation) {
+         let mainStart = CFAbsoluteTimeGetCurrent()
+         let now = Date()
+         
+         if self.selectedDate != results.date {
+             LogManager.shared.log("[Perf] Dropped stale update for \(results.currentDateString). Current: \(self.currentDateString)")
+             return
+         }
+         
+         self.solarNoon = results.solarNoon
+         self.sunRise = results.sunRise
+         self.sunSet = results.sunSet
+         self.midnightTime = results.midnightTime
+         
+         self.isCombinedDhuhrAsr = results.isCombinedDhuhrAsr
+         self.isCombinedMaghribIsha = results.isCombinedMaghribIsha
+         
+         self.prayerNames = results.prayerNames
+         self.prayerTimes = results.prayerTimes
+         self.dashboardItems = results.dashboardItems
+         
+         self.moonrise = results.moonrise
+         self.moonset = results.moonset
+         self.sunPosition = results.sunPosition
+         
+         self.currentDateString = results.currentDateString
+         self.hijriDateString = results.hijriDateString
+         
+         // Restore Smart Selection & Focus Logic
+         self.lastCalculatedFloats = results.compareTimes
+         self.lastCalculationDate = results.date
+         
+         if inputs.isToday {
+             self.determineNextPrayer(validFloatTimes: results.compareTimes, date: now)
+         } else {
+             self.nextPrayerIndex = -1
+             self.nextPrayerName = ""
+             self.timeRemaining = ""
+             self.progressToNextPrayer = 0.0
+         }
+         
+         self.reverseGeocode(loc)
+         
+         // Shared Data
+         DispatchQueue.global(qos: .background).async {
+             SharedDataManager.shared.savePrayerData(
+                 times: self.prayerTimes,
+                 names: self.prayerNames,
+                 nextIndex: self.nextPrayerIndex,
+                 location: self.locationName,
+                 hijri: self.hijriDateString
+             )
+         }
+         
+         self.isCalculating = false
+         if self.isLoading {
+             // Dismiss loading
+              if !self.isCalculating {
+                  withAnimation { self.isLoading = false }
+              }
+         }
+         
+         let uiUpdateTime = CFAbsoluteTimeGetCurrent()
+         let logTotal = "Total: \(String(format: "%.1f", (uiUpdateTime - startTime) * 1000))ms"
+         LogManager.shared.log("[Perf] Date Change: UI: \(String(format: "%.1f", (uiUpdateTime - mainStart) * 1000))ms | \(logTotal)")
+         self.performanceLog = logTotal
+         
+         if inputs.isToday && self.nextPrayerIndex != -1 {
+             LiveActivityManager.shared.start(
+                 nextPrayer: self.nextPrayerName,
+                 time: self.formatTime(results.prayerDates[self.nextPrayerIndex]),
+                 remaining: self.timeRemaining,
+                 progress: self.progressToNextPrayer,
+                 location: self.locationName
+             )
+         }
+         
+          // Phase 2 Moon
+         DispatchQueue.global(qos: .userInitiated).async {
+            let phase2Start = CFAbsoluteTimeGetCurrent()
+            var mRise = "--:--"
+            var mSet = "--:--"
+            if let rise = Astrology.getMoonrise(date: results.date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude) {
+                mRise = self.formatTime(rise)
+            }
+            if let set = Astrology.getMoonset(date: results.date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude) {
+                mSet = self.formatTime(set)
+            }
+            let mPos = Astrology.getMoonPosition(date: results.date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
+            
+            DispatchQueue.main.async {
+                self.moonrise = mRise
+                self.moonset = mSet
+                self.moonPosition = mPos
+            }
+         }
     }
 
     

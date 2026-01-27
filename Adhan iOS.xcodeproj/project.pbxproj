@@ -62,6 +62,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		D907A2FE2F293FD300011DEA /* AdhanWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AdhanWidget;
+			sourceTree = "<group>";
+		};
 		D98E45202F21989000F76CE2 /* AdhanWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -115,6 +120,7 @@
 				D98E45372F219A5000F76CE2 /* AdhanWidgetExtension.entitlements */,
 				D9B3C5D72F1C3B610025CCCA /* Adhan iOS */,
 				D98E45202F21989000F76CE2 /* AdhanWidget */,
+				D907A2FE2F293FD300011DEA /* AdhanWidget */,
 				D98E451B2F21989000F76CE2 /* Frameworks */,
 				D9B3C5D62F1C3B610025CCCA /* Products */,
 			);

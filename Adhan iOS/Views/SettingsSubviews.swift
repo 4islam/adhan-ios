@@ -199,9 +199,18 @@ struct FeatureSettingsView: View {
                 if combineShortNightEnabled {
                     Stepper("Night Threshold: \(String(format: "%.1f", shortNightDuration))h", value: $shortNightDuration, in: 1...12, step: 0.5)
                 }
+                if combineShortNightEnabled {
+                    Stepper("Night Threshold: \(String(format: "%.1f", shortNightDuration))h", value: $shortNightDuration, in: 1...12, step: 0.5)
+                }
+            }
+            
+            Section(header: Text("Dynamic Island")) {
+                Toggle("Show Next Prayer", isOn: Binding(
+                    get: { LiveActivityManager.shared.isEnabled },
+                    set: { LiveActivityManager.shared.isEnabled = $0 }
+                ))
             }
         }
-        .navigationTitle("Features")
         .sheet(isPresented: $showingDocumentPicker) {
             DocumentPicker(isPresented: $showingDocumentPicker) { url in
                 viewModel.importCustomAdhan(url: url, for: selectingForPrayer)
