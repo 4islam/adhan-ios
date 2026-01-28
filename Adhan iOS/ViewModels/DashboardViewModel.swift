@@ -227,7 +227,7 @@ class DashboardViewModel: ObservableObject {
                 
                 if let last = self.lastGeocodedLocation {
                     let distance = newLocation.distance(from: last)
-                    if distance < 500 && timeSinceLast < 600 { // 500m or 10 mins
+                    if distance < 1000 && timeSinceLast < 1800 { // 1km or 30 mins
                         return
                     }
                 }
@@ -335,16 +335,14 @@ class DashboardViewModel: ObservableObject {
         }
         
         // Periodic full refresh rule:
-        // If it's been > 1 hour since last full calc, RE-RUN calc for the SELECTED DATE.
-        // This ensures astronomical positions (sun/moon) update even if viewing another day, 
-        // OR if viewing today, ensures times stay fresh.
-        let oneHour: TimeInterval = 3600
-        if lastCalculationDate == nil || now.timeIntervalSince(lastCalculationDate!) >= oneHour {
-            print("Performing throttled 1-hour full calculation...")
+        // If it's been > 12 hours since last full calc, RE-RUN calc for the SELECTED DATE.
+        // Higher interval for maximum efficiency as requested.
+        let twelveHours: TimeInterval = 43200
+        if lastCalculationDate == nil || now.timeIntervalSince(lastCalculationDate!) >= twelveHours {
+            print("Performing throttled 12-hour full calculation...")
             calculatePrayerTimes(location: LocationManager.shared)
             
-            // Only schedule notifications based on REAL TIME (today/future), 
-            // no matter what day we are viewing.
+            // Only schedule notifications based on REAL TIME (today/future)
             scheduleNotifications()
         }
     }
@@ -622,13 +620,13 @@ class DashboardViewModel: ObservableObject {
         }
         
         // Safety Debounce: Don't recalculate if location changed very little (e.g. GPS jitter)
-        // unless it's been a long time (1 hour from updateTime() or 10 mins here)
+        // unless it's been a long time (12 hours from updateTime() or 30 mins here)
         if let lastLoc = self.lastGeocodedLocation {
             let distance = loc.distance(from: lastLoc)
             let timeSinceLast = Date().timeIntervalSince(self.lastCalculationDate ?? Date.distantPast)
             
-            // If we are viewing 'today' and moved < 500m and calculated < 10 mins ago, skip
-            if self.isToday && distance < 500 && timeSinceLast < 600 {
+            // If we are viewing 'today' and moved < 1000m and calculated < 30 mins ago, skip
+            if self.isToday && distance < 1000 && timeSinceLast < 1800 {
                 self.isCalculating = false
                 return
             }
