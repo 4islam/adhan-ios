@@ -10,6 +10,8 @@ struct CalculationSettingsView: View {
     @AppStorage("maghribOffset") private var maghribOffset: Double = 0
     @AppStorage("ishaOffset") private var ishaOffset: Double = 0
     
+    @EnvironmentObject var viewModel: DashboardViewModel
+    
     var body: some View {
         Form {
             Section(header: Text("Calculation Method")) {
@@ -23,10 +25,12 @@ struct CalculationSettingsView: View {
                     Text("Tehran").tag(7)
                     Text("Ahmadiyya").tag(8)
                 }
+                .onChange(of: calcMethod) { _ in viewModel.refreshSettings() }
             }
             
             Section(header: Text("Asr Juristic Method")) {
                 Toggle("Hanafi (Later Asr)", isOn: $asrForHanafi)
+                    .onChange(of: asrForHanafi) { _ in viewModel.refreshSettings() }
             }
             
             Section(header: Text("High Latitude Rule")) {
@@ -36,12 +40,16 @@ struct CalculationSettingsView: View {
                     Text("One Seventh").tag(2)
                     Text("Angle Based").tag(3)
                 }
+                .onChange(of: highLatMethod) { _ in viewModel.refreshSettings() }
             }
             
             Section(header: Text("Manual Offsets (Minutes)")) {
                 Stepper("Fajr: \(Int(fajrOffset))", value: $fajrOffset, in: -60...60)
+                    .onChange(of: fajrOffset) { _ in viewModel.refreshSettings() }
                 Stepper("Maghrib: \(Int(maghribOffset))", value: $maghribOffset, in: -60...60)
+                    .onChange(of: maghribOffset) { _ in viewModel.refreshSettings() }
                 Stepper("Isha: \(Int(ishaOffset))", value: $ishaOffset, in: -60...60)
+                    .onChange(of: ishaOffset) { _ in viewModel.refreshSettings() }
             }
         }
         .navigationTitle("Calculation")
@@ -129,6 +137,10 @@ struct AudioSettingsView: View {
                     Text("Custom (\(selection.wrappedValue))").tag(selection.wrappedValue)
                 }
             }
+            .onChange(of: selection.wrappedValue) { _ in
+                // Sounds change -> Notifications change
+                viewModel.refreshSettings()
+            }
             Button(action: {
                 selectingForPrayer = prayer
                 showingDocumentPicker = true
@@ -168,8 +180,10 @@ struct FeatureSettingsView: View {
         Form {
             Section(header: Text("Tahajjud Alarm")) {
                 Toggle("Enable Tahajjud", isOn: $tahajjudEnabled)
+                    .onChange(of: tahajjudEnabled) { _ in viewModel.refreshSettings() }
                 if tahajjudEnabled {
                     Stepper("Offset: \(Int(tahajjudOffset))m before Fajr", value: $tahajjudOffset, in: 10...120, step: 5)
+                        .onChange(of: tahajjudOffset) { _ in viewModel.refreshSettings() }
                     
                     Divider()
                     
@@ -181,6 +195,8 @@ struct FeatureSettingsView: View {
                             Text("Custom (\(adhanTahajjud))").tag(adhanTahajjud)
                         }
                     }
+                    .onChange(of: adhanTahajjud) { _ in viewModel.refreshSettings() }
+                    
                     Button("Select custom file for Tahajjud...") {
                         selectingForPrayer = "Tahajjud"
                         showingDocumentPicker = true
@@ -190,17 +206,20 @@ struct FeatureSettingsView: View {
             
             Section(header: Text("Prayer Combining (Smart)")) {
                 Stepper("Standard Gap Threshold: \(Int(combineThreshold))m", value: $combineThreshold, in: 0...120, step: 5)
+                    .onChange(of: combineThreshold) { _ in viewModel.refreshSettings() }
+                
                 Text("Dhuhr/Asr or Maghrib/Isha combine if their own gap is small.")
                     .font(.caption).foregroundColor(.secondary)
                 
                 Stepper("Asr-Maghrib Gap: \(Int(asrMaghribGapThreshold))m", value: $asrMaghribGapThreshold, in: 0...120, step: 5)
+                    .onChange(of: asrMaghribGapThreshold) { _ in viewModel.refreshSettings() }
                 
                 Toggle("Combine if Short Night", isOn: $combineShortNightEnabled)
+                    .onChange(of: combineShortNightEnabled) { _ in viewModel.refreshSettings() }
+                
                 if combineShortNightEnabled {
                     Stepper("Night Threshold: \(String(format: "%.1f", shortNightDuration))h", value: $shortNightDuration, in: 1...12, step: 0.5)
-                }
-                if combineShortNightEnabled {
-                    Stepper("Night Threshold: \(String(format: "%.1f", shortNightDuration))h", value: $shortNightDuration, in: 1...12, step: 0.5)
+                        .onChange(of: shortNightDuration) { _ in viewModel.refreshSettings() }
                 }
             }
             

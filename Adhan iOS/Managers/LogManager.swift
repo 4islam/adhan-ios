@@ -36,6 +36,13 @@ class LogManager: ObservableObject {
     
     private var saveWorkItem: DispatchWorkItem?
     
+    /// Flag to control performance-heavy logging. Defaulted to false.
+    @Published var isPerfLoggingEnabled: Bool = UserDefaults.standard.bool(forKey: "isPerfLoggingEnabled") {
+        didSet {
+            UserDefaults.standard.set(isPerfLoggingEnabled, forKey: "isPerfLoggingEnabled")
+        }
+    }
+    
     func log(_ message: String) {
         let entry = LogEntry(message: message)
         DispatchQueue.main.async {
@@ -49,6 +56,17 @@ class LogManager: ObservableObject {
             self.queueSave()
         }
         print("LOG: \(message)") // Also print to console
+    }
+    
+    func perfLog(_ message: String) {
+        if isPerfLoggingEnabled {
+            log("[Perf] \(message)")
+        } else {
+            // Optional: Still print to console but don't persist to UI/Prefs if disabled?
+            // User asked for controllable, usually means "I don't want to see them".
+            // Let's only print to console for developers but skip the persistence overhead.
+            print("PERF_LOG (Suppressed): \(message)")
+        }
     }
     
     func clearLogs() {

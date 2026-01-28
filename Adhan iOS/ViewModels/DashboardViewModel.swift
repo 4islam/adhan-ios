@@ -577,6 +577,15 @@ class DashboardViewModel: ObservableObject {
     
     // Returns true if actually scheduled
     private func scheduleSinglePrayer(name: String, floatTime: Double, baseDate: Date, calendar: Calendar, checkDate: Date) -> Bool {
+        // Preference check: Is this specific prayer enabled?
+        let defaults = UserDefaults.standard
+        let isEnabled = defaults.bool(forKey: "notification_enabled_\(name)") || defaults.object(forKey: "notification_enabled_\(name)") == nil // Default to true
+        
+        if !isEnabled && name != "Tahajjud" {
+            // Special case: Tahajjud is checked in the loop via its own flag
+            return false
+        }
+        
         let hour = Int(floatTime)
         let minute = Int((floatTime - Double(hour)) * 60)
         let second = Int(((floatTime * 60) - floor(floatTime * 60)) * 60)
@@ -588,6 +597,16 @@ class DashboardViewModel: ObservableObject {
         
         if let prayerDate = calendar.date(from: components) {
             if prayerDate > checkDate {
+                // Day of week check
+                let daysKey = "notification_days_\(name)"
+                let allowedDaysString = defaults.string(forKey: daysKey) ?? "1,2,3,4,5,6,7"
+                let allowedDays = allowedDaysString.split(separator: ",").compactMap { Int($0) }
+                let weekday = calendar.component(.weekday, from: prayerDate)
+                
+                if !allowedDays.contains(weekday) {
+                    return false
+                }
+
                 LogManager.shared.log("Dashboard: Scheduling \(name) at \(prayerDate.formatted(date: .abbreviated, time: .standard))")
                 
                 let adhanFile = getAdhanFile(for: name)
@@ -641,7 +660,7 @@ class DashboardViewModel: ObservableObject {
         cacheLock.unlock()
         
         if let results = cached {
-            LogManager.shared.log("[Perf] Cache hit for \(dateKey)")
+            LogManager.shared.perfLog("Cache hit for \(dateKey)")
             // Simulate inputs for applyResults
             let inputs = CalculationInputs(
                 startCalcMethod: self.startCalcMethod,
@@ -980,7 +999,7 @@ class DashboardViewModel: ObservableObject {
          cacheLock.unlock()
 
          if self.selectedDate != results.date {
-             LogManager.shared.log("[Perf] Handled update for \(results.currentDateString). UI is viewing different date: \(self.currentDateString)")
+             LogManager.shared.perfLog("Handled update for \(results.currentDateString). UI is viewing different date: \(self.currentDateString)")
              self.isCalculating = false
              return
          }
@@ -1046,7 +1065,7 @@ class DashboardViewModel: ObservableObject {
          
          let uiUpdateTime = CFAbsoluteTimeGetCurrent()
          let logTotal = "Total: \(String(format: "%.1f", (uiUpdateTime - startTime) * 1000))ms"
-         LogManager.shared.log("[Perf] Date Change: UI: \(String(format: "%.1f", (uiUpdateTime - mainStart) * 1000))ms | \(logTotal)")
+         LogManager.shared.perfLog("Date Change: UI: \(String(format: "%.1f", (uiUpdateTime - mainStart) * 1000))ms | \(logTotal)")
          self.performanceLog = logTotal
          
          if inputs.isToday && self.nextPrayerIndex != -1 {

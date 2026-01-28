@@ -158,12 +158,19 @@ struct LogsView: View {
     @ObservedObject var logManager = LogManager.shared
     
     var body: some View {
-        List {
-            if logManager.logs.isEmpty {
-                Text("No logs recorded.")
-                    .foregroundColor(.secondary)
-            } else {
-                ForEach(logManager.logs) { log in
+        Form {
+            Section(header: Text("Options")) {
+                Toggle("Enable Performance Logging", isOn: $logManager.isPerfLoggingEnabled)
+                Text("Enables high-frequency logs for calculations and state changes. Default is OFF for battery efficiency.")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            
+            Section(header: Text("Logs")) {
+                if logManager.logs.isEmpty {
+                    Text("No logs recorded.")
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(logManager.logs) { log in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(log.message)
                             .font(.body)
@@ -176,7 +183,8 @@ struct LogsView: View {
                 }
             }
         }
-        .navigationTitle("App Logs")
+    }
+    .navigationTitle("App Logs")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack {
