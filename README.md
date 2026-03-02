@@ -75,6 +75,13 @@ Contributions are welcome! Please feel free to submit Pull Requests or open issu
 
 ---
 
+## 📜 Credits
+
+- **Calculation Logic:** Ported from [PrayTime.js](http://praytimes.org/) by Hamid Zarrabi-Zadeh.
+- **License:** The calculation core is licensed under [Creative Commons 3.0 (BY-NC-SA)](https://creativecommons.org/licenses/by-nc-sa/3.0/).
+
+---
+
 ## 📜 License
 
 This project is licensed under the MIT License.
