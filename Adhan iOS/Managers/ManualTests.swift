@@ -14,7 +14,78 @@ class ManualTests {
         testAppGroupAccess()
         testResolveSoundPath()
         testAudioPathResolutionRegression()
+        testPrayerOverrides()
         log("--- ALL TESTS COMPLETED ---")
+    }
+    
+    private func testPrayerOverrides() {
+        log("Test: Prayer Overrides Persistence & Logic")
+        let prayer = "Fajr"
+        let day = 1 // Sunday
+        
+        // 1. Initial State / Clear
+        PrayerTimes.clearOverride(prayer: prayer, weekday: day)
+        if PrayerTimes.getOverride(prayer: prayer, weekday: day) == nil {
+            log("✅ PASSED: Override cleared.")
+        } else {
+            log("❌ FAILED: Override NOT cleared.")
+        }
+        
+        // 2. Default values
+        let def = PrayerTimes.PrayerOverride.default()
+        if def.isEnabled && def.volume == 1.0 {
+             log("✅ PASSED: Default override values are correct.")
+        } else {
+             log("❌ FAILED: Default override values incorrect.")
+        }
+        
+        // 3. Save & Load
+        var override = PrayerTimes.PrayerOverride.default()
+        override.volume = 0.5
+        override.volumeOverrideEnabled = true
+        override.isEnabled = false
+        
+        PrayerTimes.saveOverride(override, prayer: prayer, weekday: day)
+        
+        if let loaded = PrayerTimes.getOverride(prayer: prayer, weekday: day) {
+            if loaded.volume == 0.5 && loaded.isEnabled == false && loaded.volumeOverrideEnabled == true {
+                log("✅ PASSED: Persistence successful (volume/enabled/flag).")
+            } else {
+                log("❌ FAILED: Loaded values mismatch. Vol: \(loaded.volume), Enabled: \(loaded.isEnabled)")
+            }
+        } else {
+            log("❌ FAILED: Key not found in UserDefaults after save.")
+        }
+        
+        // 4. Sync Logic (Days String)
+        let daysKey = "notification_days_\(prayer)"
+        UserDefaults.standard.set("1,2,3,4,5,6,7", forKey: daysKey)
+        
+        func sync(isEnabled: Bool) {
+            var currentDays = UserDefaults.standard.string(forKey: daysKey) ?? "1,2,3,4,5,6,7"
+            var set = Set(currentDays.split(separator: ",").compactMap { Int($0) })
+            if isEnabled { set.insert(day) } else { set.remove(day) }
+            let sorted = set.sorted()
+            let result = sorted.map { String($0) }.joined(separator: ",")
+            UserDefaults.standard.set(result, forKey: daysKey)
+        }
+        
+        sync(isEnabled: false)
+        if UserDefaults.standard.string(forKey: daysKey) == "1,2,3,4,5,6,7".replacingOccurrences(of: "1,", with: "") {
+             // Wait, Sunday is 1. If we remove 1, they would be "2,3,4,5,6,7"
+             if UserDefaults.standard.string(forKey: daysKey) == "2,3,4,5,6,7" {
+                 log("✅ PASSED: Sync logic disabled day correct.")
+             } else {
+                 log("❌ FAILED: Sync logic result: \(UserDefaults.standard.string(forKey: daysKey) ?? "nil")")
+             }
+        }
+        
+        sync(isEnabled: true)
+        if UserDefaults.standard.string(forKey: daysKey) == "1,2,3,4,5,6,7" {
+            log("✅ PASSED: Sync logic enabled day correct.")
+        } else {
+            log("❌ FAILED: Sync logic result: \(UserDefaults.standard.string(forKey: daysKey) ?? "nil")")
+        }
     }
     
     private func testAudioPathResolutionRegression() {

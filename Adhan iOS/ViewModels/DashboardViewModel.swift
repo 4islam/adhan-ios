@@ -42,27 +42,11 @@ class DashboardViewModel: ObservableObject {
     @Published var progressToNextPrayer: Double = 0.0
     @Published var hijriDateString: String = ""
     @Published var locationName: String = "Locating..."
-    @Published var locationTimeZone: TimeZone? = nil {
-        didSet {
-            let tz = locationTimeZone ?? .current
-            DashboardViewModel.timeFormatter.timeZone = tz
-            DashboardViewModel.dateFormatter.timeZone = tz
-            DashboardViewModel.hijriFormatter.timeZone = tz
-            
-            // Recalculate whenever timezone changes to update offsets
-            calculatePrayerTimes(location: LocationManager.shared)
-        }
-    }
     
     @Published var selectedDate: Date = Date()
     
     var isToday: Bool {
-        let cal = locationTimeZone != nil ? {
-            var c = Calendar.current
-            c.timeZone = locationTimeZone!
-            return c
-        }() : Calendar.current
-        return cal.isDateInToday(selectedDate)
+        Calendar.current.isDateInToday(selectedDate)
     }
 
     // Celestial Positions for Background
@@ -196,13 +180,16 @@ class DashboardViewModel: ObservableObject {
         // Fallback if location takes too long (e.g. older devices)
         DispatchQueue.main.asyncAfter(deadline: .now() + 12.0) { [weak self] in
             guard let self = self else { return }
-            // Only fire if we are STILL loading or haven't calculated anything yet
             if self.isLoading && (self.locationName == "Locating..." || self.lastCalculatedFloats.isEmpty) {
-                print("DashboardViewModel: Location timed out. Using Default (Mecca) for UI placeholder.")
+                print("DashboardViewModel: Location timed out. Using Default (Mecca).")
                 self.loadingStatus = "Location Timeout. Using Default."
                 
+                // Construct a default location (Mecca)
                 let defaultLoc = CLLocation(latitude: 21.4225, longitude: 39.8262)
-                self.calculatePrayerTimes(location: LocationManager.shared, forcedLocation: defaultLoc)
+                LocationManager.shared.setManualLocation(defaultLoc)
+                
+                // Force calculation immediately to bypass debounce and clear loading state
+                self.calculatePrayerTimes(location: LocationManager.shared)
             }
         }
     }
@@ -343,7 +330,7 @@ class DashboardViewModel: ObservableObject {
         // If we represent "Today", we want to update the countdowns dynamically
         if isToday {
             if !lastCalculatedFloats.isEmpty {
-                determineNextPrayer(validFloatTimes: lastCalculatedFloats, date: now, tz: self.locationTimeZone)
+                determineNextPrayer(validFloatTimes: lastCalculatedFloats, date: now)
             }
         }
         
@@ -590,9 +577,16 @@ class DashboardViewModel: ObservableObject {
     
     // Returns true if actually scheduled
     private func scheduleSinglePrayer(name: String, floatTime: Double, baseDate: Date, calendar: Calendar, checkDate: Date) -> Bool {
-        // Preference check: Is this specific prayer enabled?
+        // Day of week check
+        let weekday = calendar.component(.weekday, from: baseDate)
+        
+        // Preference check: Is this specific prayer enabled globally?
         let defaults = UserDefaults.standard
-        let isEnabled = defaults.bool(forKey: "notification_enabled_\(name)") || defaults.object(forKey: "notification_enabled_\(name)") == nil // Default to true
+        let isEnabledGlobally = defaults.bool(forKey: "notification_enabled_\(name)") || defaults.object(forKey: "notification_enabled_\(name)") == nil // Default to true
+        
+        // Check for per-day override
+        let override = PrayerTimes.getOverride(prayer: name, weekday: weekday)
+        let isEnabled = override?.isEnabled ?? isEnabledGlobally
         
         if !isEnabled && name != "Tahajjud" {
             // Special case: Tahajjud is checked in the loop via its own flag
@@ -643,32 +637,18 @@ class DashboardViewModel: ObservableObject {
     }
     
 
-    func calculatePrayerTimes(location: LocationManager, forcedLocation: CLLocation? = nil) {
-        guard let loc = forcedLocation ?? location.location else {
+    func calculatePrayerTimes(location: LocationManager) {
+        guard let loc = location.location else {
             // Still waiting for location
             self.loadingStatus = "Locating..."
             self.isCalculating = false
             return
         }
         
-        // Only geocode if it's the ACTUAL user location, not a forced placeholder
-        if forcedLocation == nil {
-            self.reverseGeocode(loc)
-        }
-        
         // Safety Debounce: Don't recalculate if location changed very little (e.g. GPS jitter)
         // unless it's been a long time (12 hours from updateTime() or 30 mins here)
         if let lastLoc = self.lastGeocodedLocation {
             let distance = loc.distance(from: lastLoc)
-            
-            // If we moved significantly (e.g. > 10km), clear the cache to purge any stale location data
-            if distance > 10000 {
-                LogManager.shared.log("Dashboard: Significant location change detected (\(distance)m). Clearing cache.")
-                cacheLock.lock()
-                calculationCache.removeAll()
-                cacheLock.unlock()
-            }
-
             let timeSinceLast = Date().timeIntervalSince(self.lastCalculationDate ?? Date.distantPast)
             
             // If we are viewing 'today' and moved < 1000m and calculated < 30 mins ago, skip
@@ -679,13 +659,7 @@ class DashboardViewModel: ObservableObject {
         }
         
         let date = selectedDate
-        let dateStr = DashboardViewModel.cacheKeyFormatter.string(from: date)
-        
-        // Cache Key: Date + Location (0.1 deg resolution) + TimeZone
-        let latKey = String(format: "%.1f", loc.coordinate.latitude)
-        let lngKey = String(format: "%.1f", loc.coordinate.longitude)
-        let tzKey = locationTimeZone?.identifier ?? "default"
-        let dateKey = "\(dateStr)_\(latKey)_\(lngKey)_\(tzKey)"
+        let dateKey = DashboardViewModel.cacheKeyFormatter.string(from: date)
         
         // Check cache first
         cacheLock.lock()
@@ -713,9 +687,7 @@ class DashboardViewModel: ObservableObject {
                 tahajjudEnabled: self.tahajjudEnabled,
                 nextPrayerName: self.nextPrayerName,
                 isToday: self.isToday,
-                dashboardItems: self.dashboardItems,
-                timeAnchor: self.timeAnchor,
-                locationTimeZone: self.locationTimeZone
+                dashboardItems: self.dashboardItems
             )
             self.applyResults(results, inputs: inputs, startTime: CFAbsoluteTimeGetCurrent(), loc: loc)
             return
@@ -765,9 +737,7 @@ class DashboardViewModel: ObservableObject {
             tahajjudEnabled: tahajjudEnabled,
             nextPrayerName: nextPrayerName,
             isToday: isToday,
-            dashboardItems: dashboardItems,
-            timeAnchor: self.timeAnchor,
-            locationTimeZone: self.locationTimeZone
+            dashboardItems: dashboardItems
         )
         
         // Move to Background
@@ -796,8 +766,6 @@ class DashboardViewModel: ObservableObject {
         let nextPrayerName: String
         let isToday: Bool
         let dashboardItems: [DashboardItem]
-        let timeAnchor: TimeAnchor
-        let locationTimeZone: TimeZone?
     }
 
     struct CalculationResults {
@@ -845,11 +813,7 @@ class DashboardViewModel: ObservableObject {
         let pt = PrayerTimes()
 
         // Extract components once
-        let calendar = inputs.locationTimeZone != nil ? {
-            var cal = Calendar(identifier: .gregorian)
-            cal.timeZone = inputs.locationTimeZone!
-            return cal
-        }() : Calendar.current
+        let calendar = Calendar.current
         let components = calendar.dateComponents([.year, .month, .day], from: date)
         let year = components.year ?? 2000
         let month = components.month ?? 1
@@ -871,31 +835,15 @@ class DashboardViewModel: ObservableObject {
         // 1. Solar Noon (Zawal)
         pt.lat = loc.coordinate.latitude
         pt.lng = loc.coordinate.longitude
-        
-        if let ltz = inputs.locationTimeZone {
-            pt.timeZone = Double(ltz.secondsFromGMT(for: date)) / 3600.0
-        } else {
-            pt.timeZone = pt.effectiveTimeZone(year: year, month: month, day: day, timeZone: nil)
-        }
-        
+        pt.timeZone = pt.effectiveTimeZone(year: year, month: month, day: day, timeZone: nil)
         pt.jDate = pt.julianDate(year: year, month: month, day: day) - pt.lng / (15 * 24)
         
         let zawalFloat = pt.computeMidDay(t: 12.0/24.0) + (pt.timeZone - pt.lng / 15.0)
         let solarNoonStr = pt.floatToTimeFormat(zawalFloat, format: originalFormat)
         
         // 2. Main Calculation (Optimized: Get Doubles directly)
-        pt.setDhuhrMinutes(0) 
-        
-        // CRITICAL: Pass the double timezone to getPrayerTimesDoubles
-        let tzDouble: Double
-        if let ltz = inputs.locationTimeZone {
-            tzDouble = Double(ltz.secondsFromGMT(for: date)) / 3600.0
-        } else {
-            tzDouble = pt.effectiveTimeZone(year: year, month: month, day: day, timeZone: nil)
-        }
-        pt.timeZone = tzDouble
-        
-        let adjustedFloatTimes = pt.getPrayerTimesDoubles(date: date, latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude, timeZone: tzDouble)
+        pt.setDhuhrMinutes(10.0) 
+        let adjustedFloatTimes = pt.getPrayerTimesDoubles(date: date, latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude)
         
         if adjustedFloatTimes.count < 7 { return }
             
@@ -1017,35 +965,8 @@ class DashboardViewModel: ObservableObject {
             let moonRiseStr = mRise != nil ? pt.floatToTimeFormat(Double(calendar.component(.hour, from: mRise!)) + Double(calendar.component(.minute, from: mRise!)) / 60.0, format: originalFormat) : "--:--"
             let moonSetStr = mSet != nil ? pt.floatToTimeFormat(Double(calendar.component(.hour, from: mSet!)) + Double(calendar.component(.minute, from: mSet!)) / 60.0, format: originalFormat) : "--:--"
             let sunPos = Astrology.getSunPosition(date: date, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
-            
-            // --- ANCHOR LOGIC ---
-            // If an anchor is set, we want the AstroPosition to reflect the anchor's time,
-            // and we want results.date to reflect that too so the slider/UI updates.
-            var finalDate = date
-            var finalSunPos = sunPos
-            
-            if inputs.timeAnchor != .none {
-                var targetFloat: Double?
-                switch inputs.timeAnchor {
-                case .sunrise: targetFloat = adjustedFloatTimes[1]
-                case .solarNoon: targetFloat = zawalFloat
-                case .sunset: targetFloat = adjustedFloatTimes[4]
-                default: break
-                }
-                
-                if let tf = targetFloat {
-                    let h = Int(tf)
-                    let m = Int((tf - Double(h)) * 60)
-                    let s = Int(((tf * 60) - floor(tf * 60)) * 60)
-                    if let anchoredDate = calendar.date(bySettingHour: h, minute: m, second: s, of: date) {
-                        finalDate = anchoredDate
-                        finalSunPos = Astrology.getSunPosition(date: anchoredDate, lat: loc.coordinate.latitude, lng: loc.coordinate.longitude)
-                    }
-                }
-            }
-            
-            let curDateStr = DashboardViewModel.dateFormatter.string(from: finalDate)
-            let hijriStr = DashboardViewModel.hijriFormatter.string(from: finalDate)
+            let curDateStr = DashboardViewModel.dateFormatter.string(from: date)
+            let hijriStr = DashboardViewModel.hijriFormatter.string(from: date)
 
             // Package results
             let results = CalculationResults(
@@ -1062,10 +983,10 @@ class DashboardViewModel: ObservableObject {
                 dashboardItems: newItems,
                 moonrise: moonRiseStr,
                 moonset: moonSetStr,
-                sunPosition: finalSunPos,
+                sunPosition: sunPos,
                 currentDateString: curDateStr,
                 hijriDateString: hijriStr,
-                date: finalDate
+                date: date
             )
             
             DispatchQueue.main.async { [weak self] in
@@ -1078,29 +999,17 @@ class DashboardViewModel: ObservableObject {
          let now = Date()
          
          // Store in cache if not already there (only if it matches the requested date)
-         let dateStr = DashboardViewModel.cacheKeyFormatter.string(from: results.date)
-         let latKey = String(format: "%.1f", loc.coordinate.latitude)
-         let lngKey = String(format: "%.1f", loc.coordinate.longitude)
-         let tzKey = inputs.locationTimeZone?.identifier ?? "default"
-         let dateKey = "\(dateStr)_\(latKey)_\(lngKey)_\(tzKey)"
+         let dateKey = DashboardViewModel.cacheKeyFormatter.string(from: results.date)
          
          cacheLock.lock()
          calculationCache[dateKey] = results
          cacheLock.unlock()
 
-         // If not an anchor update, we should check if date still matches to avoid race conditions.
-         // If it IS an anchor update, we ALLOW the results.date to overwrite our selectedDate.
-         let cal = Calendar.current
-         let isSameDay = cal.isDate(self.selectedDate, inSameDayAs: results.date)
-         
-         if self.selectedDate != results.date && (self.timeAnchor == .none || !isSameDay) {
+         if self.selectedDate != results.date {
              LogManager.shared.perfLog("Handled update for \(results.currentDateString). UI is viewing different date: \(self.currentDateString)")
              self.isCalculating = false
              return
          }
-         
-         // Apply the results date (which might be anchored)
-         self.selectedDate = results.date
 
          
          self.solarNoon = results.solarNoon
@@ -1129,7 +1038,7 @@ class DashboardViewModel: ObservableObject {
           }
          
          if inputs.isToday {
-             self.determineNextPrayer(validFloatTimes: results.compareTimes, date: now, tz: inputs.locationTimeZone)
+             self.determineNextPrayer(validFloatTimes: results.compareTimes, date: now)
              
              // Geo-coding: Only if location moved > 1km (handled inside reverseGeocode)
              self.reverseGeocode(loc)
@@ -1215,7 +1124,6 @@ class DashboardViewModel: ObservableObject {
                     } else {
                         self.locationName = city.isEmpty ? (state.isEmpty ? "Unknown" : state) : city
                     }
-                    self.locationTimeZone = placemark.timeZone
                 }
             }
         }
@@ -1238,12 +1146,8 @@ class DashboardViewModel: ObservableObject {
     
 
 
-    func determineNextPrayer(validFloatTimes: [Double], date: Date, tz: TimeZone? = nil) {
-        let calendar = tz != nil ? {
-            var cal = Calendar(identifier: .gregorian)
-            cal.timeZone = tz!
-            return cal
-        }() : Calendar.current
+    func determineNextPrayer(validFloatTimes: [Double], date: Date) {
+        let calendar = Calendar.current
         let components = calendar.dateComponents([.hour, .minute, .second], from: date)
         let currentHour = Double(components.hour!) + Double(components.minute!) / 60.0 + Double(components.second!) / 3600.0
         

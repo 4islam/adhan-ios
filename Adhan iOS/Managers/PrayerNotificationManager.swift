@@ -217,20 +217,26 @@ class PrayerNotificationManager: NSObject {
                 // Check if notification is enabled for this specific prayer
                 let enabledKey = "notification_enabled_\(name)"
                 // Default to true if key missing
-                let isEnabled = defaults.object(forKey: enabledKey) as? Bool ?? true
+                let isEnabledGlobally = defaults.object(forKey: enabledKey) as? Bool ?? true
+                
+                // Check if notification is enabled for this specific day of the week
+                let weekday = Calendar.current.component(.weekday, from: prayerDate)
+                
+                // Check for per-day override
+                let override = PrayerTimes.getOverride(prayer: name, weekday: weekday)
+                let isEnabled = override?.isEnabled ?? isEnabledGlobally
                 
                 if !isEnabled {
-                    LogManager.shared.log("PrayerManager: Skipping \(name) - Notification Disabled by user.")
+                    LogManager.shared.log("PrayerManager: Skipping \(name) - Notification Disabled by user (global or override).")
                     continue
                 }
                 
-                // Check if notification is enabled for this specific day of the week
                 let daysKey = "notification_days_\(name)"
                 let allowedDaysString = defaults.string(forKey: daysKey) ?? "1,2,3,4,5,6,7"
                 let allowedDays = allowedDaysString.split(separator: ",").compactMap { Int($0) }
-                let weekday = Calendar.current.component(.weekday, from: prayerDate)
                 
-                if !allowedDays.contains(weekday) {
+                if override == nil && !allowedDays.contains(weekday) {
+                    // Only apply global day selector if no individual override exists
                     LogManager.shared.log("PrayerManager: Skipping \(name) - Disabled for weekday \(weekday). Allowed: [\(allowedDaysString)]")
                     continue
                 }

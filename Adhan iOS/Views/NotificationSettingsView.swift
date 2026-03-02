@@ -23,6 +23,11 @@ struct NotificationSettingsView: View {
     
     @EnvironmentObject var viewModel: DashboardViewModel
     
+    @State private var configuringPrayer: String?
+    @State private var configuringWeekday: Int?
+    @State private var showingOverrideDialog = false
+    @State private var refreshID = UUID()
+    
     var body: some View {
         Form {
             Section(header: Text("Prayer Notifications")) {
@@ -33,18 +38,58 @@ struct NotificationSettingsView: View {
                 prayerRow(name: "Isha", enabled: $enabledIsha, days: $daysIsha, timeSensitive: $timeSensitiveIsha)
             }
             
-            Section(footer: Text("Disabling a prayer will stop all adhan audio and notifications for that specific time.\n\nSelect days to enable/disable notifications for specific days of the week.\n\n'Time Sensitive' attempts to break through Focus modes.")) {
+            Section(footer: Text("Disabling a prayer will stop all adhan audio and notifications for that specific time.\n\nSelect days to enable/disable notifications for specific days of the week. Long-press a day to configure specific audio and volume settings for that prayer on that day.\n\n'Time Sensitive' attempts to break through Focus modes.")) {
                 // Info footer
             }
         }
+        .id(refreshID)
         .navigationTitle("Notifications")
+        .sheet(isPresented: $showingOverrideDialog, onDismiss: {
+            refreshID = UUID()
+        }) {
+            if let prayer = configuringPrayer, let weekday = configuringWeekday {
+                PrayerOverrideDialog(
+                    prayer: prayer,
+                    weekday: weekday,
+                    currentOverride: PrayerTimes.getOverride(prayer: prayer, weekday: weekday),
+                    onSave: { override in
+                        PrayerTimes.saveOverride(override, prayer: prayer, weekday: weekday)
+                        
+                        // Sync with daysString
+                        syncDaysString(prayer: prayer, weekday: weekday, isEnabled: override.isEnabled)
+                        
+                        showingOverrideDialog = false
+                        viewModel.scheduleNotifications()
+                    },
+                    onCancel: {
+                        showingOverrideDialog = false
+                    },
+                    onApplyToAllDays: { override in
+                        for i in 1...7 {
+                            PrayerTimes.saveOverride(override, prayer: prayer, weekday: i)
+                            syncDaysString(prayer: prayer, weekday: i, isEnabled: override.isEnabled)
+                        }
+                        showingOverrideDialog = false
+                        viewModel.scheduleNotifications()
+                    },
+                    onApplyToAllPrayersToday: { override in
+                        let prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+                        for p in prayers {
+                            PrayerTimes.saveOverride(override, prayer: p, weekday: weekday)
+                            syncDaysString(prayer: p, weekday: weekday, isEnabled: override.isEnabled)
+                        }
+                        showingOverrideDialog = false
+                        viewModel.scheduleNotifications()
+                    }
+                )
+            }
+        }
         .onChange(of: enabledFajr) { _ in viewModel.scheduleNotifications() }
         .onChange(of: enabledDhuhr) { _ in viewModel.scheduleNotifications() }
         .onChange(of: enabledAsr) { _ in viewModel.scheduleNotifications() }
         .onChange(of: enabledMaghrib) { _ in viewModel.scheduleNotifications() }
         .onChange(of: enabledIsha) { _ in viewModel.scheduleNotifications() }
         
-        // Reschedule on Day changes
         .onChange(of: daysFajr) { _ in viewModel.scheduleNotifications() }
         .onChange(of: daysDhuhr) { _ in viewModel.scheduleNotifications() }
         .onChange(of: daysAsr) { _ in viewModel.scheduleNotifications() }
@@ -63,8 +108,12 @@ struct NotificationSettingsView: View {
             Toggle(name, isOn: enabled)
             
             if enabled.wrappedValue {
-                DaySelector(daysString: days)
-                    .padding(.top, 4)
+                DaySelector(prayerName: name, daysString: days) { weekday in
+                    configuringPrayer = name
+                    configuringWeekday = weekday
+                    showingOverrideDialog = true
+                }
+                .padding(.top, 4)
                 
                 Toggle("Time Sensitive", isOn: timeSensitive)
                     .font(.caption)
@@ -74,12 +123,32 @@ struct NotificationSettingsView: View {
         }
         .padding(.vertical, 8)
     }
+
+    private func syncDaysString(prayer: String, weekday: Int, isEnabled: Bool) {
+        let key = "notification_days_\(prayer)"
+        var currentDays = UserDefaults.standard.string(forKey: key) ?? "1,2,3,4,5,6,7"
+        var set = Set(currentDays.split(separator: ",").compactMap { Int($0) })
+        
+        if isEnabled {
+            set.insert(weekday)
+        } else {
+            set.remove(weekday)
+        }
+        
+        let sorted = set.sorted()
+        let result = sorted.map { String($0) }.joined(separator: ",")
+        UserDefaults.standard.set(result, forKey: key)
+        
+        // This will trigger @AppStorage to update if it matches the key
+    }
 }
 
 // MARK: - Helper Views
 
 struct DaySelector: View {
+    let prayerName: String
     @Binding var daysString: String
+    var onLongPress: (Int) -> Void
     
     // S M T W T F S
     // 1 2 3 4 5 6 7 (Sunday = 1)
@@ -88,29 +157,45 @@ struct DaySelector: View {
     var body: some View {
         HStack {
             ForEach(0..<7) { index in
-                DayButton(letter: days[index], isSelected: isDaySelected(index + 1)) {
+                DayButton(letter: days[index], isSelected: isDaySelected(index + 1), action: {
                     toggleDay(index + 1)
-                }
+                }, onLongPress: {
+                    onLongPress(index + 1)
+                })
             }
         }
     }
     
     private func isDaySelected(_ weekday: Int) -> Bool {
+        // Source of truth: If override exists, use its isEnabled. Otherwise use daysString.
+        if let override = PrayerTimes.getOverride(prayer: prayerName, weekday: weekday) {
+            return override.isEnabled
+        }
+        
         let set = Set(daysString.split(separator: ",").compactMap { Int($0) })
         return set.contains(weekday)
     }
     
     private func toggleDay(_ weekday: Int) {
-        var set = Set(daysString.split(separator: ",").compactMap { Int($0) })
-        if set.contains(weekday) {
-            set.remove(weekday)
-        } else {
-            set.insert(weekday)
-        }
+        let currentEnabled = isDaySelected(weekday)
+        let newEnabled = !currentEnabled
         
-        // Sort and store
+        // 1. Update the global daysString (for backward compatibility and general state)
+        var set = Set(daysString.split(separator: ",").compactMap { Int($0) })
+        if newEnabled {
+            set.insert(weekday)
+        } else {
+            set.remove(weekday)
+        }
         let sorted = set.sorted()
         daysString = sorted.map { String($0) }.joined(separator: ",")
+        
+        // 2. If an override exists OR we want to create one to store this state? 
+        // No, let's just keep the override synced if it exists.
+        if var override = PrayerTimes.getOverride(prayer: prayerName, weekday: weekday) {
+            override.isEnabled = newEnabled
+            PrayerTimes.saveOverride(override, prayer: prayerName, weekday: weekday)
+        }
     }
 }
 
@@ -118,6 +203,7 @@ struct DayButton: View {
     let letter: String
     let isSelected: Bool
     let action: () -> Void
+    let onLongPress: () -> Void
     
     var body: some View {
         Button(action: action) {
@@ -132,6 +218,11 @@ struct DayButton: View {
                     .foregroundColor(isSelected ? .white : .primary)
             }
         }
+        .simultaneousGesture(LongPressGesture().onEnded { _ in
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            onLongPress()
+        })
         .buttonStyle(BorderlessButtonStyle()) // Important for Forms
     }
 }

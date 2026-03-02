@@ -182,20 +182,32 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                  var perPrayerMaxVol: Float? = nil
                  
                  if let prayer = prayerName {
-                     // Keys match FadeSettingsView: "fade_{prayer}_volume", "fade_{prayer}_duration"
-                     let volKey = "fade_\(prayer.lowercased())_volume"
-                     let durKey = "fade_\(prayer.lowercased())_duration"
-                     let maxVolKey = "max_volume_\(prayer.lowercased())" // New key
-                     
-                     if UserDefaults.standard.object(forKey: volKey) != nil {
-                         initialVol = Float(UserDefaults.standard.double(forKey: volKey))
-                     }
-                     if UserDefaults.standard.object(forKey: durKey) != nil {
-                         fadeDuration = UserDefaults.standard.double(forKey: durKey)
-                     }
-                     // Check for per-prayer max volume override
-                     if UserDefaults.standard.object(forKey: maxVolKey) != nil {
-                         perPrayerMaxVol = Float(UserDefaults.standard.double(forKey: maxVolKey))
+                     // Check for per-day override first
+                     let weekday = Calendar.current.component(.weekday, from: Date())
+                     if let override = PrayerTimes.getOverride(prayer: prayer, weekday: weekday) {
+                         if override.volumeOverrideEnabled {
+                             perPrayerMaxVol = Float(override.volume)
+                         }
+                         if override.fadeOverrideEnabled {
+                             fadeDuration = override.fadeDuration
+                             initialVol = 0.0 // Usually fade from 0 if overridden
+                         }
+                         // Also check if we should even be playing (though playAdhan is usually user-triggered or validated before call)
+                     } else {
+                         // Fallback to legacy per-prayer settings (FadeSettingsView)
+                         let volKey = "fade_\(prayer.lowercased())_volume"
+                         let durKey = "fade_\(prayer.lowercased())_duration"
+                         let maxVolKey = "max_volume_\(prayer.lowercased())"
+                         
+                         if UserDefaults.standard.object(forKey: volKey) != nil {
+                             initialVol = Float(UserDefaults.standard.double(forKey: volKey))
+                         }
+                         if UserDefaults.standard.object(forKey: durKey) != nil {
+                             fadeDuration = UserDefaults.standard.double(forKey: durKey)
+                         }
+                         if UserDefaults.standard.object(forKey: maxVolKey) != nil {
+                             perPrayerMaxVol = Float(UserDefaults.standard.double(forKey: maxVolKey))
+                         }
                      }
                  }
                  

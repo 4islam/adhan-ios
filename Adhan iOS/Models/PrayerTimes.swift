@@ -517,4 +517,44 @@ public class PrayerTimes {
         a = a < 0 ? a + 24.0 : a
         return a
     }
+
+    // MARK: - Overrides Model
+
+    public struct PrayerOverride: Codable, Equatable {
+        public var isEnabled: Bool
+        public var audioOutput: String? // e.g. "Internal Speaker", or specific identifier
+        public var volumeOverrideEnabled: Bool
+        public var volume: Double // 0.0 - 1.0
+        public var fadeOverrideEnabled: Bool
+        public var fadeDuration: Double // seconds
+        
+        public static func `default`() -> PrayerOverride {
+            return PrayerOverride(
+                isEnabled: true,
+                audioOutput: nil,
+                volumeOverrideEnabled: false,
+                volume: 1.0,
+                fadeOverrideEnabled: false,
+                fadeDuration: 5.0
+            )
+        }
+    }
+    
+    public static func getOverride(prayer: String, weekday: Int) -> PrayerOverride? {
+        let key = "override_\(prayer.lowercased())_\(weekday)"
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(PrayerOverride.self, from: data)
+    }
+    
+    public static func saveOverride(_ override: PrayerOverride, prayer: String, weekday: Int) {
+        let key = "override_\(prayer.lowercased())_\(weekday)"
+        if let data = try? JSONEncoder().encode(override) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+    
+    public static func clearOverride(prayer: String, weekday: Int) {
+        let key = "override_\(prayer.lowercased())_\(weekday)"
+        UserDefaults.standard.removeObject(forKey: key)
+    }
 }

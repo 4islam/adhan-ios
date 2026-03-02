@@ -45,7 +45,7 @@ struct BackgroundView: View {
             
             // Dynamic Sun
             if let sun = sunPos, sun.altitude > -18 { // Down to astronomical twilight
-                CelestialOrb(color: getSunColor(alt: sun.altitude), size: 150, blur: showSharpOrbs ? 0 : 50)
+                CelestialOrb(color: getSunColor(alt: sun.altitude), size: 100, blur: showSharpOrbs ? 0 : 50)
                     .position(mapCoordinates(alt: sun.altitude, az: sun.azimuth))
             }
 
@@ -77,20 +77,33 @@ struct BackgroundView: View {
                         
                         // However, Waning crescent default: Lit side is LEFT.
                         // We need to know if it is waxing or waning to offset.
+                        // Simplified: Just use Moon Phase to determine offset?
+                        // Or simplistic: Assume waxing-like orientation for generic "lit side" logic
+                        // But SFSymbols vary.
+                        
+                        // IMPROVEMENT: Just add a Glow and slight yellow tint vs grey.
+                        // Rotation is complex due to symbol variation.
+                        // Let's stick to GLOW and Color first as per "realistic" request.
+                         
+                         // Re-enabling basic rotation if desired, but might be wrong for Waning.
+                         // Let's just do GLOW first.
                     }
-                }
-                
-                if showSharpOrbs {
+
                     Image(systemName: phaseName)
                         .resizable()
-                        .symbolRenderingMode(.palette) 
-                        .foregroundStyle(.white.opacity(0.9), .white.opacity(0.1)) 
+                        .symbolRenderingMode(.palette) // Use palette if available for standard multi-color
+                        .foregroundStyle(.white.opacity(0.9), .white.opacity(0.1)) // Primary (Lit), Secondary (Dark)
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 150, height: 150)
+                        .frame(width: 100, height: 100)
+                        
+                        // GLOW EFFECT
                         .shadow(color: .white.opacity(0.6), radius: 15, x: 0, y: 0)
+                        
                         .position(mapCoordinates(alt: moon.altitude, az: moon.azimuth))
                 } else {
-                    CelestialOrb(color: .white.opacity(0.8), size: 150, blur: 30)
+
+                    // Ambient Mode (App Background)
+                    CelestialOrb(color: .white.opacity(0.8), size: 100, blur: 30)
                         .position(mapCoordinates(alt: moon.altitude, az: moon.azimuth))
                 }
             }
@@ -133,45 +146,32 @@ struct BackgroundView: View {
 
     func getScreenPoint(alt: Double, az: Double) -> CGPoint? {
         let screenWidth = UIScreen.main.bounds.width
+
         let screenHeight = UIScreen.main.bounds.height
+        
         
         // Horizon (0 deg)
         let horizonY = self.horizonHeight
         
-        // Altitude range: we map sunset altitude (-0.833) to EXACTLY horizonY
-        // And zenith (90) to 0.1
-        // Below (-20) to 0.8
-        
-        let sunriseAlt = -0.833
-        let effectiveAlt = alt - sunriseAlt // 0 at sunrise/sunset
+        // Altitude range: we map -20 (below horizon) to 90 (zenith)
+
+        // Zenith (90) -> Y = 0.1
+        // Horizon (0) -> Y = horizonY (0.65)
+        // Below (-20) -> Y = 0.8
         
         var yRatio: Double
-        if effectiveAlt >= 0 {
-            // Above horizon: map 0 to 90.833 -> horizonY to 0.1
-            yRatio = horizonY - (effectiveAlt / (90.0 - sunriseAlt)) * (horizonY - 0.1)
+        if alt >= 0 {
+            // Above horizon: map 0...90 to horizonY...0.1
+            yRatio = horizonY - (alt / 90.0) * (horizonY - 0.1)
         } else {
-            // Below horizon: map 0 to -19.167 -> horizonY to 0.8
-            yRatio = horizonY + (abs(effectiveAlt) / (20.0 + sunriseAlt)) * (0.8 - horizonY)
+            // Below horizon: map 0...-20 to horizonY...0.8
+            yRatio = horizonY + (abs(alt) / 20.0) * (0.8 - horizonY)
         }
         
         let y = CGFloat(yRatio) * screenHeight
         
-        // Azimuth mapping (Spatial Feel)
-        // We face SOUTH (180).
-        // Show a 240-degree panorama: from 180-120=60 (East-ish) to 180+120=300 (West-ish)
-        // This ensures the sun/moon travel from Left to Right across most of the screen.
-        let fov: Double = 240.0
-        let centerAz: Double = 180.0
-        let leftAz = centerAz - (fov / 2.0)
-        
-        // Normalize azimuth to be relative to leftAz
-        var relativeAz = (az - leftAz).truncatingRemainder(dividingBy: 360)
-        if relativeAz < 0 { relativeAz += 360 }
-        
-        let xRatio = relativeAz / fov
-        
-        // Only return if within FOV (or close to it for smooth entry/exit)
-        // We allow slightly off-screen to avoid artifacts
+        // Azimuth: Loop around 0-360
+        let xRatio = (az.truncatingRemainder(dividingBy: 360)) / 360.0
         let x = CGFloat(xRatio) * screenWidth
         
         return CGPoint(x: x, y: y)
