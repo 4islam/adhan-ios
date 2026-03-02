@@ -191,10 +191,24 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
         if let adhanFile = userInfo["ADHAN_FILE"] as? String {
              let prayerName = userInfo["PRAYER_NAME"] as? String
              LogManager.shared.log("Notifications: Manual Foreground Playback -> \(adhanFile) for \(prayerName ?? "Unknown")")
+             
+             AdhanHistoryManager.shared.logEvent(
+                prayerName: prayerName ?? "Adhan",
+                eventType: .triggered,
+                details: "Foreground notification received. Auto-playing \(adhanFile)."
+             )
+             
              AudioManager.shared.playAdhan(fileName: adhanFile, prayerName: prayerName)
         } else {
              // Fallback if no specific file linked
              LogManager.shared.log("Notifications: Manual Foreground Playback -> adhan_regular")
+             
+             AdhanHistoryManager.shared.logEvent(
+                prayerName: "Adhan",
+                eventType: .triggered,
+                details: "Foreground notification received. No specific file found, auto-playing adhan_regular."
+             )
+             
              AudioManager.shared.playAdhan(fileName: "adhan_regular")
         }
         
@@ -205,15 +219,18 @@ class NotificationManager: NSObject, ObservableObject, UNUserNotificationCenterD
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         LogManager.shared.log("Notifications: didReceive called. ActionID: \(response.actionIdentifier)")
         
-        if response.actionIdentifier == "PLAY_ADHAN" {
-            let userInfo = response.notification.request.content.userInfo
             let adhanFile = userInfo["ADHAN_FILE"] as? String
             let prayerName = userInfo["PRAYER_NAME"] as? String
             LogManager.shared.log("Notifications: Payload: \(userInfo)")
             
+            AdhanHistoryManager.shared.logEvent(
+                prayerName: prayerName ?? "Adhan",
+                eventType: .actionTaken,
+                details: "User clicked Play Adhan from notification action."
+            )
+            
             // Tell AudioManager to play the specific audio selected
             AudioManager.shared.playAdhan(fileName: adhanFile, prayerName: prayerName)
-        }
         completionHandler()
     }
 }

@@ -65,6 +65,10 @@ struct SettingsView: View {
                 NavigationLink(destination: LogsView()) {
                     Label("App Logs", systemImage: "list.bullet.rectangle.portrait.fill")
                 }
+                
+                NavigationLink(destination: AdhanHistoryView()) {
+                    Label("Past Events", systemImage: "clock.arrow.circlepath")
+                }
             }
         }
         .navigationTitle("Settings")
@@ -190,8 +194,9 @@ struct LogsView: View {
                 HStack {
                     Button(action: {
                         let text = logManager.logs.map { "\($0.formattedTimestamp): \($0.message)" }.joined(separator: "\n")
-                        UIPasteboard.general.string = text
-                        // Optional: Show a temporary confirmation or rely on standard UI feedback
+                        DispatchQueue.main.async {
+                            UIPasteboard.general.string = text
+                        }
                     }) {
                         Image(systemName: "doc.on.doc")
                     }

@@ -135,6 +135,12 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
             let msg = "AudioManager: Failed to find audio file: \(chosenFile)"
             print(msg)
             LogManager.shared.log(msg)
+            
+            AdhanHistoryManager.shared.logEvent(
+                prayerName: prayerName ?? "Unknown",
+                eventType: .failed,
+                details: "Audio file not found: \(chosenFile)"
+            )
             return 
         }
         
@@ -236,10 +242,24 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                  isPlaying = true
                  updateCurrentRoute()
                  LogManager.shared.log("AudioManager: Playing \(chosenFile) (SysVol: \(targetSystemVolume), Fade: \(initialVol) -> 1.0 over \(fadeDuration)s)")
+                 
+                 AdhanHistoryManager.shared.logEvent(
+                    prayerName: prayerName ?? "Adhan",
+                    eventType: .played,
+                    device: currentRoute,
+                    volume: targetSystemVolume,
+                    details: "Started playback of \(chosenFile). Fade dur: \(fadeDuration)s"
+                 )
             } else {
                  let msg = "AudioManager: prepareToPlay() failed."
                  print(msg)
                  LogManager.shared.log(msg)
+                 
+                 AdhanHistoryManager.shared.logEvent(
+                    prayerName: prayerName ?? "Unknown",
+                    eventType: .failed,
+                    details: "prepareToPlay() failed."
+                 )
             }
         } catch {
             let msg = "AudioManager: Player Init Failed: \(error.localizedDescription) (\(error))"
@@ -289,6 +309,7 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
     func stop() {
         LogManager.shared.log("AudioManager: Stop requested.")
+        AdhanHistoryManager.shared.logEvent(prayerName: "Adhan", eventType: .actionTaken, details: "User requested stop.")
         fadeTimer?.invalidate() // Stop fading if interrupted
         player?.stop()
         isPlaying = false
@@ -308,6 +329,15 @@ class AudioManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         LogManager.shared.log("AudioManager: Finished playing. Success: \(flag)")
+        
+        // Log to history
+        AdhanHistoryManager.shared.logEvent(
+            prayerName: "Active Adhan", // We don't track the specific prayer name in player state currently
+            eventType: flag ? .played : .failed,
+            device: currentRoute,
+            details: flag ? "Finished playing naturally." : "Playback failed or interrupted."
+        )
+        
         fadeTimer?.invalidate()
         isPlaying = false
         deactivateSession()

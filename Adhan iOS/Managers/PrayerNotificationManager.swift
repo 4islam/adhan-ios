@@ -99,7 +99,15 @@ class PrayerNotificationManager: NSObject {
             currentOffset += chunkDuration
         }
         
+        
         LogManager.shared.log("PrayerManager: Scheduled \(chunkCount) chunks for \(prayerName) on \(startTime.formatted(date: .abbreviated, time: .omitted)). Total duration: \(String(format: "%.1f", currentOffset))s")
+        
+        AdhanHistoryManager.shared.logEvent(
+            prayerName: prayerName,
+            scheduledTime: startTime,
+            eventType: .scheduled,
+            details: "Scheduled chain of \(chunkCount) notifications (\(adhanType)). Total duration: \(String(format: "%.1f", currentOffset))s"
+        )
     }
     
     private func getAudioDuration(url: URL) -> TimeInterval {
